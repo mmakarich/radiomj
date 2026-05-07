@@ -1,0 +1,3249 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#080810">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Radio Garden · PL</title>
+
+<!-- PWA Manifest as data URL -->
+<link rel="manifest" href='data:application/manifest+json,{"name":"Radio Garden PL","short_name":"Radio","start_url":".","display":"standalone","background_color":"%23080810","theme_color":"%23080810","orientation":"portrait","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 192 192%22><rect width=%22192%22 height=%22192%22 fill=%22%23080810%22/><circle cx=%2296%22 cy=%2296%22 r=%2240%22 fill=%22none%22 stroke=%22%23D4AF37%22 stroke-width=%223%22/><circle cx=%2296%22 cy=%2296%22 r=%2210%22 fill=%22%23D4AF37%22/></svg>","sizes":"192x192","type":"image/svg+xml"}]}'>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+
+<!-- Fonts: Cinzel (display, Art Deco serif) + Josefin Sans (body) + JetBrains Mono (mono) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Josefin+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  /* DARK theme (default) */
+  --night: #080810;
+  --panel: #12121a;
+  --panel-2: #1a1a26;
+  --gold: #d4af37;
+  --gold-deep: #a68628;
+  --gold-glow: rgba(212, 175, 55, 0.18);
+  --crimson: #dc2626;
+  --crimson-glow: rgba(220, 38, 38, 0.35);
+  --ivory: #f8f0e3;
+  --silver: #6b7280;
+  --divider: #2a2a35;
+  --space-bg: radial-gradient(ellipse at center, #0a0a18 0%, #050509 60%, #000 100%);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+/* LIGHT theme override */
+:root[data-theme="light"] {
+  --night: #f5efe2;
+  --panel: #ffffff;
+  --panel-2: #f0e8d4;
+  --gold: #8b6914;
+  --gold-deep: #5e470d;
+  --gold-glow: rgba(139, 105, 20, 0.22);
+  --crimson: #b91c1c;
+  --crimson-glow: rgba(185, 28, 28, 0.35);
+  --ivory: #1a1a26;
+  --silver: #6b7280;
+  --divider: #d4c8a8;
+  --space-bg: radial-gradient(ellipse at center, #cfe8f5 0%, #aac8e0 60%, #7da6c5 100%);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+body {
+  font-family: 'Josefin Sans', system-ui, sans-serif;
+  background: var(--night);
+  color: var(--ivory);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#map { position: fixed; inset: 0; background: var(--night); }
+
+/* Leaflet dark tweaks */
+.leaflet-container { background: #050509 !important; outline: none; font-family: inherit; }
+.leaflet-control-attribution {
+  background: rgba(8, 8, 16, 0.7) !important;
+  color: var(--silver) !important;
+  font-size: 9px !important;
+  border: 1px solid var(--divider);
+  padding: 2px 6px !important;
+}
+.leaflet-control-attribution a { color: var(--gold-deep) !important; }
+.leaflet-control-zoom { border: 1px solid var(--divider) !important; box-shadow: none !important; }
+.leaflet-control-zoom a {
+  background: var(--panel) !important;
+  color: var(--gold) !important;
+  border-bottom: 1px solid var(--divider) !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 600;
+}
+.leaflet-control-zoom a:hover { background: var(--panel-2) !important; }
+
+/* Station markers — większe (18px) + 44px tap target dla mobile */
+.station-marker-wrap {
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  position: relative;
+}
+.station-marker {
+  width: 18px; height: 18px;
+  background: var(--gold);
+  border: 2px solid var(--night);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--gold-glow), 0 0 0 1.5px rgba(212,175,55,0.45);
+  transition: transform 0.15s ease;
+  pointer-events: none;
+}
+.station-marker-wrap:hover .station-marker { transform: scale(1.35); }
+
+.station-marker.active {
+  background: var(--crimson);
+  border-color: var(--ivory);
+  box-shadow: 0 0 0 0 var(--crimson-glow);
+  animation: pulse 1.6s ease-out infinite;
+  width: 22px; height: 22px;
+  z-index: 1000;
+}
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(220,38,38,0.6); }
+  70%  { box-shadow: 0 0 0 18px rgba(220,38,38,0); }
+  100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+}
+
+/* Cluster styling */
+.marker-cluster {
+  background: rgba(212, 175, 55, 0.18) !important;
+  border: 1px solid var(--gold) !important;
+}
+.marker-cluster div {
+  background: var(--gold) !important;
+  color: var(--night) !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+  border: none !important;
+}
+
+/* ============== GLOBE (3D orthographic) ============== */
+#globeContainer {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: none; /* toggled by JS */
+  background: var(--space-bg);
+  cursor: grab;
+  touch-action: none;
+}
+#globeContainer.visible { display: block; }
+#globeContainer:active { cursor: grabbing; }
+#globeStars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+:root[data-theme="light"] #globeStars { opacity: 0; }
+#globeSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.globe-sphere {
+  fill: url(#globeOcean);
+  stroke: var(--gold);
+  stroke-width: 0.6;
+  stroke-opacity: 0.5;
+}
+.globe-graticule {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 0.3;
+  stroke-opacity: 0.18;
+}
+.globe-land {
+  fill: var(--panel-2);
+  stroke: var(--gold);
+  stroke-width: 0.5;
+  stroke-opacity: 0.6;
+}
+:root[data-theme="light"] .globe-land {
+  fill: #e8d8a8;
+}
+.globe-marker {
+  fill: var(--gold);
+  stroke: var(--night);
+  stroke-width: 1.2;
+  cursor: pointer;
+  transition: r 0.15s, fill 0.15s;
+  pointer-events: auto;
+}
+.globe-marker-hit {
+  fill: rgba(0,0,0,0);
+  stroke: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.globe-marker:hover { r: 8; }
+.globe-marker.active {
+  fill: var(--crimson);
+  stroke: var(--ivory);
+  r: 8;
+}
+/* Wszystkie inne SVG elementy globusa nie powinny przechwytywać kliknięć */
+.globe-sphere, .globe-graticule, .globe-land, .globe-night, .globe-night-edge {
+  pointer-events: none;
+}
+.globe-night {
+  fill: rgba(0, 0, 20, 0.55);
+  pointer-events: none;
+}
+:root[data-theme="light"] .globe-night {
+  fill: rgba(40, 30, 80, 0.30);
+}
+.globe-night-edge {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 0.8;
+  stroke-opacity: 0.35;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+.globe-sun {
+  fill: #ffd966;
+  stroke: #ff9900;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 8px rgba(255, 200, 80, 0.9));
+  pointer-events: none;
+}
+.globe-sun-rays {
+  stroke: #ffd966;
+  stroke-width: 1.2;
+  stroke-opacity: 0.6;
+  pointer-events: none;
+}
+.globe-moon {
+  fill: #e8e8f0;
+  stroke: #b0b0c0;
+  stroke-width: 1;
+  filter: drop-shadow(0 0 4px rgba(220, 220, 240, 0.7));
+  pointer-events: none;
+}
+.globe-moon-shadow {
+  fill: rgba(20, 20, 35, 0.85);
+  pointer-events: none;
+}
+
+/* ============== COSMOS MODE ============== */
+/* Active dot na przycisku kosmosu */
+#cosmosBtn.active::after {
+  content: '';
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold);
+}
+.icon-btn { position: relative; }
+
+/* Tory orbit (eliptyczne ścieżki) */
+.cosmos-orbit {
+  fill: none;
+  stroke: var(--gold);
+  stroke-opacity: 0.18;
+  stroke-width: 0.5;
+  stroke-dasharray: 2 4;
+  pointer-events: none;
+}
+.cosmos-orbit.moon-orbit {
+  stroke-opacity: 0.28;
+  stroke-width: 0.8;
+  stroke-dasharray: 4 4;
+  stroke: #c0c0d0;
+}
+
+/* ISS - jasny, większy niż satelity */
+.cosmos-iss {
+  fill: #4ade80;
+  stroke: #ffffff;
+  stroke-width: 1.2;
+  filter: drop-shadow(0 0 5px rgba(74, 222, 128, 0.8));
+  pointer-events: auto;
+  cursor: pointer;
+}
+.cosmos-iss-trail {
+  fill: none;
+  stroke: #4ade80;
+  stroke-width: 1.5;
+  stroke-opacity: 0.55;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+/* Satelity - małe, srebrne, lekko świecące */
+.cosmos-sat {
+  fill: #cbd5e1;
+  stroke: #94a3b8;
+  stroke-width: 0.5;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.cosmos-sat-starlink { fill: #60a5fa; stroke: #1e40af; }
+.cosmos-sat-gps { fill: #fbbf24; stroke: #92400e; }
+.cosmos-sat-geo { fill: #f472b6; stroke: #831843; }
+
+/* Śmieci - emoji rotujące */
+.cosmos-debris {
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+/* Komety - szybkie obiekty z warkoczem przelatujące przez tło */
+.cosmos-comet-head {
+  fill: #fef3c7;
+  stroke: #fbbf24;
+  stroke-width: 1;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.9));
+  pointer-events: none;
+}
+.cosmos-comet-tail {
+  fill: none;
+  stroke: url(#cometTailGradient);
+  stroke-width: 5;
+  stroke-linecap: round;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* Tooltip-style label dla satelitów */
+.cosmos-label {
+  fill: var(--ivory);
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--night);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+/* Cosmos panel options */
+.cosmos-options {
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+.cosmos-section {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+  padding: 12px 0 4px;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 4px;
+}
+.cosmos-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.cosmos-toggle:hover {
+  background: var(--panel);
+  border-color: var(--gold-deep);
+}
+.cosmos-toggle input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px; height: 18px;
+  border: 1.5px solid var(--gold-deep);
+  border-radius: 3px;
+  background: var(--night);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+.cosmos-toggle input[type="checkbox"]:checked {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+.cosmos-toggle input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--night);
+  font-weight: bold;
+  font-size: 14px;
+  line-height: 1;
+}
+.ct-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ivory);
+}
+.ct-emoji {
+  font-size: 18px;
+  width: 22px;
+  text-align: center;
+}
+.cosmos-info {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border-left: 2px solid var(--gold);
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--silver);
+  line-height: 1.5;
+}
+.cosmos-info strong { color: var(--gold); font-weight: 400; }
+
+/* ============== Recently Played panel ============== */
+.recent-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--divider);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.recent-row:hover { background: var(--panel-2); }
+.recent-row .rr-favicon {
+  width: 32px; height: 32px;
+  border-radius: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--divider);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  color: var(--gold);
+}
+.recent-row .rr-favicon img { width: 100%; height: 100%; object-fit: cover; }
+.recent-row .rr-favicon svg { width: 16px; height: 16px; }
+.recent-row .rr-info { flex: 1; min-width: 0; }
+.recent-row .rr-name {
+  font-weight: 500; font-size: 13px; color: var(--ivory);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.recent-row .rr-meta {
+  font-size: 10px; color: var(--silver); margin-top: 2px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.recent-empty {
+  padding: 24px; text-align: center; color: var(--silver);
+  font-size: 12px; font-style: italic;
+}
+
+/* ============== Genre chips ============== */
+.genre-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 12px;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--divider);
+}
+.genre-bar::-webkit-scrollbar { display: none; }
+.genre-chip {
+  flex-shrink: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--divider);
+  color: var(--ivory);
+  padding: 6px 12px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-family: 'Cinzel', serif;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.genre-chip:hover { border-color: var(--gold); }
+.genre-chip.active {
+  background: var(--gold);
+  color: var(--night);
+  border-color: var(--gold);
+}
+
+/* Top bar */
+.topbar {
+  position: fixed;
+  top: calc(var(--safe-top) + 12px);
+  left: 12px; right: 12px;
+  z-index: 500;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+.topbar > * { pointer-events: auto; }
+
+.brand {
+  background: rgba(8, 8, 16, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--gold);
+  padding: 8px 14px;
+  border-radius: 2px;
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  font-size: 11px;
+  color: var(--gold);
+  text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.brand::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--crimson); box-shadow: 0 0 8px var(--crimson);
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot { 50% { opacity: 0.4; } }
+
+.icon-btn {
+  background: rgba(8, 8, 16, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--divider);
+  width: 40px; height: 40px;
+  border-radius: 2px;
+  color: var(--ivory);
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.icon-btn:hover, .icon-btn.active { border-color: var(--gold); color: var(--gold); }
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn .badge {
+  position: absolute; top: -4px; right: -4px;
+  background: var(--crimson); color: var(--ivory);
+  border-radius: 50%; width: 16px; height: 16px;
+  font-size: 9px; display: grid; place-items: center;
+  font-weight: 600;
+}
+
+.spacer { flex: 1; }
+
+/* Search panel */
+.panel {
+  position: fixed;
+  top: calc(var(--safe-top) + 64px);
+  left: 12px; right: 12px;
+  z-index: 600;
+  background: rgba(18, 18, 26, 0.97);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  max-height: calc(100vh - 220px - var(--safe-top) - var(--safe-bottom));
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+}
+.panel.open { display: flex; animation: slide-down 0.25s ease; }
+@keyframes slide-down { from { transform: translateY(-12px); opacity: 0; } }
+
+.panel-header {
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 10px;
+  border-bottom: 1px solid var(--divider);
+}
+.panel-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.search-input {
+  background: transparent;
+  border: none;
+  color: var(--ivory);
+  font-family: inherit;
+  font-size: 14px;
+  flex: 1;
+  outline: none;
+  padding: 4px 0;
+}
+.search-input::placeholder { color: var(--silver); }
+
+.station-list { overflow-y: auto; max-height: 60vh; }
+.station-row {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(42, 42, 53, 0.5);
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.station-row:hover { background: rgba(212, 175, 55, 0.06); }
+.station-row:last-child { border-bottom: none; }
+.station-row.active { background: rgba(220, 38, 38, 0.08); border-left: 2px solid var(--crimson); }
+
+.station-favicon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--night);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.station-favicon img { width: 100%; height: 100%; object-fit: cover; }
+.station-favicon svg { width: 18px; height: 18px; color: var(--gold); }
+
+.station-meta { flex: 1; min-width: 0; }
+.station-name {
+  font-size: 13px; font-weight: 500;
+  color: var(--ivory);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.station-info {
+  font-size: 11px;
+  color: var(--silver);
+  margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.station-fav-btn {
+  background: none; border: none;
+  color: var(--silver);
+  cursor: pointer;
+  padding: 6px;
+}
+.station-fav-btn.active { color: var(--crimson); }
+
+.empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--silver);
+  font-size: 12px;
+}
+.empty-state .deco {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: var(--gold-deep);
+  margin-bottom: 12px;
+}
+
+/* Player */
+.player {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 700;
+  background: linear-gradient(180deg, rgba(18, 18, 26, 0.95) 0%, rgba(8, 8, 16, 1) 100%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--gold-deep);
+  padding: 12px 14px calc(12px + var(--safe-bottom)) 14px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.player.visible { transform: translateY(0); }
+.player.expanded { padding-top: 24px; }
+
+.player-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.player-favicon {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: var(--night);
+  border: 1px solid var(--divider);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.player-favicon img { width: 100%; height: 100%; object-fit: cover; }
+.player-favicon svg { width: 24px; height: 24px; color: var(--gold); }
+
+.player-meta { flex: 1; min-width: 0; }
+.player-name {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ivory);
+  letter-spacing: 0.04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.player-info {
+  font-size: 10px;
+  color: var(--silver);
+  margin-top: 2px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Equalizer */
+.eq {
+  display: flex; gap: 2px; align-items: flex-end;
+  width: 16px; height: 16px;
+}
+.eq span {
+  flex: 1; background: var(--gold);
+  height: 30%;
+  transition: height 0.2s;
+}
+.eq.playing span { animation: eq-bounce 0.8s ease-in-out infinite; background: var(--crimson); }
+.eq.playing span:nth-child(1) { animation-delay: 0s; }
+.eq.playing span:nth-child(2) { animation-delay: 0.15s; }
+.eq.playing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes eq-bounce {
+  0%, 100% { height: 30%; }
+  50% { height: 95%; }
+}
+
+.player-btn {
+  background: var(--gold);
+  border: none;
+  color: var(--night);
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.2s;
+}
+.player-btn:active { transform: scale(0.92); }
+.player-btn svg { width: 22px; height: 22px; }
+.player-btn.loading svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.player-mini-btn {
+  background: transparent;
+  border: 1px solid var(--divider);
+  color: var(--silver);
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.player-mini-btn:hover { border-color: var(--gold); color: var(--gold); }
+.player-mini-btn.active { color: var(--crimson); border-color: var(--crimson); }
+.player-mini-btn svg { width: 16px; height: 16px; }
+
+/* Loading overlay */
+.loading {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--night);
+  display: grid; place-items: center;
+  flex-direction: column;
+  transition: opacity 0.4s;
+}
+.loading.hidden { opacity: 0; pointer-events: none; }
+.loading-content { text-align: center; }
+.loading-deco {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  color: var(--gold-deep);
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+.loading-title {
+  font-family: 'Cinzel', serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  margin-bottom: 24px;
+  text-transform: uppercase;
+}
+.loading-spinner {
+  width: 40px; height: 40px;
+  border: 1.5px solid var(--divider);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  margin: 0 auto;
+  animation: spin 0.8s linear infinite;
+}
+.loading-status {
+  margin-top: 16px;
+  font-size: 11px;
+  color: var(--silver);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: calc(120px + var(--safe-bottom));
+  left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--panel);
+  border: 1px solid var(--gold);
+  padding: 10px 18px;
+  border-radius: 2px;
+  font-size: 12px;
+  color: var(--ivory);
+  z-index: 9000;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Filters bar */
+.filters {
+  display: flex; gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.filter-chip {
+  background: transparent;
+  border: 1px solid var(--divider);
+  color: var(--silver);
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+.filter-chip.active { border-color: var(--gold); color: var(--gold); background: rgba(212,175,55,0.08); }
+
+/* Decorative corners (Art Deco touch) */
+.corner-deco {
+  position: fixed;
+  width: 30px; height: 30px;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.4;
+}
+.corner-deco::before, .corner-deco::after {
+  content: '';
+  position: absolute;
+  background: var(--gold);
+}
+.corner-tl { top: calc(var(--safe-top) + 4px); left: 4px; }
+.corner-tl::before { top: 0; left: 0; width: 12px; height: 1px; }
+.corner-tl::after { top: 0; left: 0; width: 1px; height: 12px; }
+.corner-tr { top: calc(var(--safe-top) + 4px); right: 4px; }
+.corner-tr::before { top: 0; right: 0; width: 12px; height: 1px; }
+.corner-tr::after { top: 0; right: 0; width: 1px; height: 12px; }
+
+@media (max-width: 380px) {
+  .brand { font-size: 10px; padding: 7px 10px; letter-spacing: 0.12em; }
+  .icon-btn { width: 36px; height: 36px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading" id="loading">
+  <div class="loading-content">
+    <div class="loading-deco">— Anno 2026 —</div>
+    <div class="loading-title">Radio Garden</div>
+    <div class="loading-spinner"></div>
+    <div class="loading-status" id="loadingStatus">Łączenie ze świata…</div>
+  </div>
+</div>
+
+<div class="corner-deco corner-tl"></div>
+<div class="corner-deco corner-tr"></div>
+
+<div id="map"></div>
+<div id="globeContainer">
+  <canvas id="globeStars"></canvas>
+  <svg id="globeSvg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="globeOcean" cx="35%" cy="30%" r="80%">
+        <stop offset="0%" stop-color="#1a3a5a"/>
+        <stop offset="60%" stop-color="#0a1e34"/>
+        <stop offset="100%" stop-color="#050a14"/>
+      </radialGradient>
+      <linearGradient id="cometTailGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#fef3c7" stop-opacity="0.95"/>
+        <stop offset="40%" stop-color="#fbbf24" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+  </svg>
+</div>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="brand"><span id="stationCount">—</span> stacji</div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="viewToggleBtn" aria-label="Globus / Mapa" title="Przełącz mapa/globus">
+    <svg id="iconGlobe" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+    <svg id="iconMap" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><path d="M9 4v16M15 4v16M3 8l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/></svg>
+  </button>
+  <button class="icon-btn" id="cosmosBtn" aria-label="Tryb kosmiczny" title="Tryb kosmiczny — orbity, ISS, komety">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>
+  </button>
+  <button class="icon-btn" id="themeToggleBtn" aria-label="Tryb jasny/ciemny" title="Tryb jasny/ciemny">
+    <svg id="iconMoon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <svg id="iconSun" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+  </button>
+  <button class="icon-btn" id="recentBtn" aria-label="Ostatnio słuchane" title="Ostatnio słuchane">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+  </button>
+  <button class="icon-btn" id="searchBtn" aria-label="Szukaj">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+  </button>
+  <button class="icon-btn" id="favBtn" aria-label="Ulubione" style="position: relative;">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    <span class="badge" id="favBadge" style="display:none">0</span>
+  </button>
+</div>
+
+<!-- Search panel -->
+<div class="panel" id="searchPanel">
+  <div class="panel-header">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--gold)"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="searchInput" class="search-input" placeholder="Szukaj stacji, kraju lub gatunku…" autocomplete="off">
+    <button class="icon-btn" id="searchClose" style="width:32px;height:32px;border:none">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="genre-bar" id="genreBar">
+    <button class="genre-chip active" data-genre="all">Wszystkie</button>
+    <button class="genre-chip" data-genre="anime">🎌 Anime</button>
+    <button class="genre-chip" data-genre="jpop">🎤 J-Pop</button>
+    <button class="genre-chip" data-genre="kpop">🎤 K-Pop</button>
+    <button class="genre-chip" data-genre="phonk">🌫 Phonk</button>
+    <button class="genre-chip" data-genre="lofi">☕ Lo-Fi</button>
+    <button class="genre-chip" data-genre="electronic">⚡ Electronic</button>
+    <button class="genre-chip" data-genre="rock">🎸 Rock</button>
+    <button class="genre-chip" data-genre="jazz">🎷 Jazz</button>
+    <button class="genre-chip" data-genre="classical">🎻 Classical</button>
+  </div>
+  <div class="filters">
+    <button class="filter-chip active" data-filter="all">Wszystkie kraje</button>
+    <button class="filter-chip" data-filter="near">Blisko mnie</button>
+    <button class="filter-chip" data-filter="PL">🇵🇱 PL</button>
+    <button class="filter-chip" data-filter="JP">🇯🇵 JP</button>
+    <button class="filter-chip" data-filter="KR">🇰🇷 KR</button>
+    <button class="filter-chip" data-filter="DE">🇩🇪 DE</button>
+    <button class="filter-chip" data-filter="GB">🇬🇧 GB</button>
+    <button class="filter-chip" data-filter="US">🇺🇸 US</button>
+    <button class="filter-chip" data-filter="FR">🇫🇷 FR</button>
+    <button class="filter-chip" data-filter="IT">🇮🇹 IT</button>
+  </div>
+  <div class="station-list" id="searchResults"></div>
+</div>
+
+<!-- Recently Played panel -->
+<div class="panel" id="recentPanel">
+  <div class="panel-header">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--gold)"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    <div class="panel-title">Ostatnio słuchane</div>
+    <div class="spacer" style="flex:1"></div>
+    <button class="icon-btn" id="recentClear" style="width:32px;height:32px;border:none" title="Wyczyść">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6l-1.4 14a2 2 0 0 1-2 1.8H8.4a2 2 0 0 1-2-1.8L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+    </button>
+    <button class="icon-btn" id="recentClose" style="width:32px;height:32px;border:none">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="station-list" id="recentResults"></div>
+</div>
+
+<!-- Favorites panel -->
+<div class="panel" id="favPanel">
+  <div class="panel-header">
+    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" style="color: var(--crimson)"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    <div class="panel-title">Ulubione</div>
+    <div class="spacer" style="flex:1"></div>
+    <button class="icon-btn" id="favClose" style="width:32px;height:32px;border:none">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="station-list" id="favResults"></div>
+</div>
+
+<!-- Cosmos settings panel -->
+<div class="panel" id="cosmosPanel">
+  <div class="panel-header">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--gold)"><ellipse cx="12" cy="12" rx="10" ry="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>
+    <div class="panel-title">Tryb kosmiczny</div>
+    <div class="spacer" style="flex:1"></div>
+    <button class="icon-btn" id="cosmosClose" style="width:32px;height:32px;border:none">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="cosmos-options">
+    <label class="cosmos-toggle">
+      <input type="checkbox" id="optCosmosOn"><span class="ct-text"><span class="ct-emoji">🌌</span>Włącz tryb kosmiczny</span>
+    </label>
+    <div class="cosmos-section">Pokazuj na orbicie:</div>
+    <label class="cosmos-toggle">
+      <input type="checkbox" id="optShowOrbits"><span class="ct-text"><span class="ct-emoji">⭕</span>Tory orbit</span>
+    </label>
+    <label class="cosmos-toggle">
+      <input type="checkbox" id="optShowMoonOrbit"><span class="ct-text"><span class="ct-emoji">🌙</span>Orbita Księżyca</span>
+    </label>
+    <label class="cosmos-toggle">
+      <input type="checkbox" id="optShowISS"><span class="ct-text"><span class="ct-emoji">🛰</span>Stacja ISS</span>
+    </label>
+    <label class="cosmos-toggle">
+      <input type="checkbox" id="optShowSatellites"><span class="ct-text"><span class="ct-emoji">📡</span>Satelity (Starlink, GPS, GEO)</span>
+    </label>
+    <label class="cosmos-toggle">
+      <input type="checkbox" id="optShowDebris"><span class="ct-text"><span class="ct-emoji">🥫</span>Śmieci kosmiczne</span>
+    </label>
+    <div class="cosmos-section">Zjawiska:</div>
+    <label class="cosmos-toggle">
+      <input type="checkbox" id="optShowComets"><span class="ct-text"><span class="ct-emoji">☄️</span>Komety</span>
+    </label>
+    <label class="cosmos-toggle">
+      <input type="checkbox" id="optShowMeteors"><span class="ct-text"><span class="ct-emoji">⭐</span>Spadające gwiazdy</span>
+    </label>
+    <div class="cosmos-info" id="cosmosInfo"></div>
+  </div>
+</div>
+
+<!-- Player -->
+<div class="player" id="player">
+  <div class="player-row">
+    <div class="player-favicon" id="playerFavicon">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 14 0"/><circle cx="12" cy="14" r="2"/><path d="M12 16v6"/></svg>
+    </div>
+    <div class="player-meta">
+      <div class="player-name" id="playerName">—</div>
+      <div class="player-info" id="playerInfo">— · —</div>
+    </div>
+    <div class="eq" id="playerEq"><span></span><span></span><span></span></div>
+    <button class="player-mini-btn" id="favToggleBtn" aria-label="Dodaj do ulubionych">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </button>
+    <button class="player-btn" id="playPauseBtn" aria-label="Graj">
+      <svg id="playIcon" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <svg id="pauseIcon" style="display:none" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Audio element -->
+<audio id="audio" preload="none" crossorigin="anonymous"></audio>
+
+<!-- Leaflet + clustering: robust loader with CDN fallback (jsDelivr -> unpkg -> cdnjs) -->
+<script>
+(function(){
+  function loadScript(urls, cb){
+    var i = 0;
+    function tryNext(){
+      if (i >= urls.length) { cb(new Error('All CDNs failed for ' + urls[0])); return; }
+      var s = document.createElement('script');
+      s.src = urls[i++];
+      s.crossOrigin = '';
+      s.onload = function(){ cb(null); };
+      s.onerror = function(){ tryNext(); };
+      document.head.appendChild(s);
+    }
+    tryNext();
+  }
+  window.__leafletReady = new Promise(function(resolve, reject){
+    loadScript([
+      'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
+      'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'
+    ], function(err){
+      if (err || typeof L === 'undefined') { reject(err || new Error('Leaflet not available')); return; }
+      loadScript([
+        'https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+        'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js'
+      ], function(err2){
+        if (err2) { reject(err2); return; }
+        // d3 + topojson dla globusa (lazy/parallel, nie blokuje appki przy błędzie)
+        loadScript([
+          'https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js',
+          'https://unpkg.com/d3@7.9.0/dist/d3.min.js',
+          'https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js'
+        ], function(){
+          loadScript([
+            'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js',
+            'https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js'
+          ], function(){
+            window.__globeReady = (typeof d3 !== 'undefined' && typeof topojson !== 'undefined');
+            resolve();
+          });
+        });
+      });
+    });
+  });
+})();
+</script>
+
+<script>
+'use strict';
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  stations: [],          // wszystkie stacje z geo
+  byUuid: new Map(),
+  favorites: JSON.parse(localStorage.getItem('rg_favorites') || '[]'),
+  recents: JSON.parse(localStorage.getItem('rg_recents') || '[]'),  // [{uuid, name, country, countryCode, url, favicon, ts}]
+  theme: localStorage.getItem('rg_theme') || 'dark',          // 'dark' | 'light'
+  view: localStorage.getItem('rg_view') || 'map',             // 'map' | 'globe'
+  genre: 'all',
+  current: null,
+  isPlaying: false,
+  isLoading: false,
+  filter: 'all',
+  userLatLng: null,
+  markers: new Map(),    // uuid -> Leaflet marker
+  cosmos: JSON.parse(localStorage.getItem('rg_cosmos') || JSON.stringify({
+    on: false,
+    orbits: true,
+    moonOrbit: true,
+    iss: true,
+    satellites: true,
+    debris: true,
+    comets: true,
+    meteors: true
+  }))
+};
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+const audio = $('audio');
+
+const COUNTRY_CENTERS = {
+  // Europa
+  PL:[52.0,19.5], DE:[51.0,10.4], FR:[46.6,2.2], GB:[54.0,-2.0], IE:[53.4,-8.0],
+  ES:[40.4,-3.7], PT:[39.5,-8.0], IT:[42.5,12.5], NL:[52.1,5.3], BE:[50.5,4.5],
+  CH:[46.8,8.2], AT:[47.5,14.5], CZ:[49.8,15.5], SK:[48.7,19.7], HU:[47.2,19.5],
+  RO:[45.9,24.9], BG:[42.7,25.4], GR:[39.0,22.0], DK:[56.0,9.5], SE:[62.0,15.0],
+  NO:[64.5,11.5], FI:[64.0,26.0], IS:[64.9,-19.0], EE:[58.6,25.0], LV:[56.9,24.6],
+  LT:[55.2,23.9], BY:[53.7,27.9], UA:[48.4,31.2], RU:[60.0,90.0], RS:[44.0,21.0],
+  HR:[45.1,15.2], SI:[46.1,14.8], BA:[43.9,17.7], MK:[41.6,21.7], TR:[39.0,35.2],
+  ME:[42.7,19.4], AL:[41.2,20.2], XK:[42.6,20.9], MD:[47.4,28.4], LU:[49.8,6.1],
+  LI:[47.2,9.6], MC:[43.7,7.4], AD:[42.5,1.6], SM:[43.9,12.5], VA:[41.9,12.5],
+  FO:[62.0,-7.0], GI:[36.1,-5.4], CY:[35.1,33.4], MT:[35.9,14.4],
+  // Azja
+  JP:[36.2,138.3], KR:[36.5,127.8], KP:[40.3,127.5], CN:[35.9,104.2], TW:[23.7,121.0],
+  HK:[22.3,114.2], MO:[22.2,113.5], SG:[1.35,103.8], MY:[4.2,101.9], ID:[-2.5,118.0],
+  PH:[12.9,121.8], TH:[15.9,100.9], VN:[14.1,108.3], LA:[19.9,102.5], KH:[12.6,104.9],
+  MM:[21.9,95.9], BN:[4.5,114.7], TL:[-8.9,125.7],
+  IN:[20.6,78.9], PK:[30.4,69.3], BD:[23.7,90.4], LK:[7.9,80.8], NP:[28.4,84.1],
+  BT:[27.5,90.4], MV:[3.2,73.2], AF:[33.9,67.7],
+  IR:[32.4,53.7], IQ:[33.2,43.7], SA:[23.9,45.1], AE:[23.4,53.8], QA:[25.4,51.2],
+  BH:[26.0,50.5], KW:[29.3,47.5], OM:[21.5,55.9], YE:[15.6,48.5], JO:[30.6,36.2],
+  LB:[33.9,35.9], SY:[34.8,38.9], IL:[31.0,34.9], PS:[31.9,35.2],
+  KZ:[48.0,66.9], UZ:[41.4,64.6], TM:[38.9,59.6], TJ:[38.9,71.3], KG:[41.2,74.8],
+  MN:[46.9,103.8], GE:[42.3,43.4], AM:[40.1,45.0], AZ:[40.1,47.6],
+  // Afryka
+  ZA:[-30.6,22.9], EG:[26.8,30.8], MA:[31.8,-7.1], DZ:[28.0,1.7], TN:[33.9,9.5],
+  LY:[26.3,17.2], SD:[12.9,30.2], SS:[6.9,31.3], ET:[9.1,40.5], KE:[-0.0,37.9],
+  UG:[1.4,32.3], TZ:[-6.4,34.9], NG:[9.1,8.7], GH:[7.9,-1.0], SN:[14.5,-14.5],
+  CI:[7.5,-5.5], CM:[7.4,12.4], CD:[-4.0,21.8], CG:[-0.2,15.8], AO:[-11.2,17.9],
+  MZ:[-18.7,35.5], ZW:[-19.0,29.2], ZM:[-13.1,27.8], MW:[-13.3,34.3], RW:[-1.9,29.9],
+  BI:[-3.4,29.9], MG:[-18.8,46.9], MU:[-20.3,57.5], SC:[-4.7,55.5], NA:[-22.9,18.5],
+  BW:[-22.3,24.7], LS:[-29.6,28.2], SZ:[-26.5,31.5],
+  BF:[12.2,-1.6], ML:[17.6,-4.0], NE:[17.6,8.1], TD:[15.5,18.7], BJ:[9.3,2.3],
+  TG:[8.6,0.8], GN:[9.9,-9.7], GW:[11.8,-15.2], SL:[8.5,-11.8], LR:[6.4,-9.4],
+  GM:[13.4,-15.5], MR:[21.0,-10.9], CV:[16.5,-23.0], GQ:[1.7,10.3], GA:[-0.8,11.6],
+  ST:[0.2,6.6], DJ:[11.8,42.6], SO:[5.1,46.2], ER:[15.2,39.8], KM:[-11.9,43.9],
+  RE:[-21.1,55.5], EH:[24.2,-12.9], YT:[-12.8,45.2],
+  // Ameryka Pn + Karaiby
+  US:[38.0,-97.0], CA:[56.1,-106.3], MX:[23.6,-102.6],
+  CU:[21.5,-77.8], DO:[18.7,-70.2], HT:[18.9,-72.3], JM:[18.1,-77.3], PR:[18.2,-66.6],
+  TT:[10.7,-61.2], BS:[25.0,-77.4], BB:[13.2,-59.5], GT:[15.8,-90.2], HN:[15.2,-86.2],
+  SV:[13.8,-88.9], NI:[12.9,-85.2], CR:[9.7,-83.8], PA:[8.5,-80.8], BZ:[17.2,-88.5],
+  BM:[32.3,-64.8], KY:[19.5,-80.6], TC:[21.7,-71.8], VG:[18.4,-64.6], AI:[18.2,-63.0],
+  MS:[16.7,-62.2], GP:[16.2,-61.6], MQ:[14.6,-61.0], BL:[17.9,-62.8], MF:[18.1,-63.1],
+  AW:[12.5,-69.9], CW:[12.2,-69.0], SX:[18.0,-63.1], BQ:[12.2,-68.3], PM:[46.9,-56.3],
+  GL:[71.7,-42.6],
+  // Ameryka Łac.
+  BR:[-14.2,-51.9], AR:[-38.4,-63.6], CL:[-35.7,-71.5], CO:[4.6,-74.3], PE:[-9.2,-75.0],
+  VE:[6.4,-66.6], EC:[-1.8,-78.2], BO:[-16.3,-63.6], PY:[-23.4,-58.4], UY:[-32.5,-55.8],
+  GY:[4.9,-58.9], SR:[3.9,-56.0], GF:[3.9,-53.1], FK:[-51.8,-59.5], SH:[-7.9,-14.4],
+  // Oceania
+  AU:[-25.3,133.8], NZ:[-40.9,174.9], PG:[-6.3,143.9], FJ:[-17.7,178.0], SB:[-9.6,160.2],
+  VU:[-15.4,166.9], NC:[-20.9,165.6], PF:[-17.7,-149.4], WS:[-13.8,-172.1], TO:[-21.2,-175.2],
+  KI:[-3.4,168.7], TV:[-7.1,177.6], NR:[-0.5,166.9], PW:[7.5,134.6], MH:[7.1,171.2],
+  FM:[7.4,150.5], GU:[13.4,144.8], MP:[15.2,145.7], AS:[-14.3,-170.7], CK:[-21.2,-159.8],
+  NU:[-19.1,-169.9], TK:[-9.2,-171.8], WF:[-13.8,-177.2], IO:[-6.3,71.9], PN:[-24.7,-127.4]
+};
+
+const COUNTRY_FLAGS = {
+  PL:'🇵🇱',DE:'🇩🇪',FR:'🇫🇷',GB:'🇬🇧',IT:'🇮🇹',ES:'🇪🇸',NL:'🇳🇱',US:'🇺🇸',
+  JP:'🇯🇵',KR:'🇰🇷',CN:'🇨🇳',TW:'🇹🇼',IN:'🇮🇳',BR:'🇧🇷',AR:'🇦🇷',
+  RU:'🇷🇺',UA:'🇺🇦',CZ:'🇨🇿',SK:'🇸🇰',HU:'🇭🇺',RO:'🇷🇴',GR:'🇬🇷',
+  SE:'🇸🇪',NO:'🇳🇴',FI:'🇫🇮',DK:'🇩🇰',IS:'🇮🇸',IE:'🇮🇪',BE:'🇧🇪',
+  CH:'🇨🇭',AT:'🇦🇹',PT:'🇵🇹',TR:'🇹🇷',IL:'🇮🇱',AE:'🇦🇪',
+  AU:'🇦🇺',NZ:'🇳🇿',CA:'🇨🇦',MX:'🇲🇽',TH:'🇹🇭',VN:'🇻🇳',ID:'🇮🇩',
+  PH:'🇵🇭',MY:'🇲🇾',SG:'🇸🇬',ZA:'🇿🇦',EG:'🇪🇬',MA:'🇲🇦'
+};
+
+function flag(code) {
+  if (!code) return '';
+  return COUNTRY_FLAGS[code.toUpperCase()] || '';
+}
+
+function showToast(msg, ms = 2000) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+function setLoadingStatus(msg) { $('loadingStatus').textContent = msg; }
+
+function hideLoading() {
+  const el = $('loading');
+  el.classList.add('hidden');
+  setTimeout(() => el.style.display = 'none', 400);
+}
+
+/* ============================================================
+   API: radio-browser.info
+   ============================================================ */
+const API_BASES = [
+  'https://de1.api.radio-browser.info/json',
+  'https://at1.api.radio-browser.info/json',
+  'https://nl1.api.radio-browser.info/json'
+];
+
+async function apiFetch(path, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  let lastErr;
+  for (const base of API_BASES) {
+    try {
+      const r = await fetch(`${base}${path}?${qs}`, {
+        headers: { 'User-Agent': 'RadioGardenPL/1.0 PWA' }
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+// Haversine — odległość km między dwoma punktami
+function distKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Odrzuć stację jeśli geo niezgodne z kodem kraju (>2500 km od centroidu)
+function geoSanityOk(s) {
+  const cc = (s.countrycode || '').toUpperCase();
+  const center = COUNTRY_CENTERS[cc];
+  if (!center) return true; // brak referencji - dajemy szansę
+  const lat = parseFloat(s.geo_lat), lng = parseFloat(s.geo_long);
+  if (!isFinite(lat) || !isFinite(lng)) return false;
+  // (0,0) to klasyczny "fallback" błędnych geo - od razu odrzuć
+  if (Math.abs(lat) < 0.5 && Math.abs(lng) < 0.5) return false;
+  return distKm(lat, lng, center[0], center[1]) < 2500;
+}
+
+function normalizeStation(s) {
+  return {
+    uuid: s.stationuuid,
+    name: (s.name || '').trim().slice(0, 80),
+    url: s.url_resolved,
+    country: s.country || s.countrycode || '',
+    countryCode: (s.countrycode || '').toUpperCase(),
+    tags: (s.tags || '').split(',').filter(Boolean).slice(0, 4).join(' · '),
+    tagsRaw: (s.tags || '').toLowerCase(),
+    favicon: s.favicon || '',
+    bitrate: s.bitrate || 0,
+    codec: s.codec || '',
+    votes: s.votes || 0,
+    lat: parseFloat(s.geo_lat),
+    lng: parseFloat(s.geo_long)
+  };
+}
+
+const UNSUPPORTED_CODECS = /^(HLS|FLAC|OPUS\+OGG|AAC\+HLS)$/i;
+const PLAYLIST_EXT = /\.(m3u8|m3u|pls|asx|ram)(\?|$)/i;
+
+function isStationValid(s) {
+  if (!s.url_resolved || !s.name || !s.geo_lat || !s.geo_long) return false;
+  if (!s.url_resolved.startsWith('https://')) return false;
+  if (s.codec && UNSUPPORTED_CODECS.test(s.codec)) return false;
+  if (PLAYLIST_EXT.test(s.url_resolved)) return false;
+  if (!geoSanityOk(s)) return false;
+  return true;
+}
+
+// Lista kodów krajów dla zapewnienia min. 5 stacji/kraj.
+// Robimy osobne zapytanie per kod kraju - to gwarantuje pokrycie nawet egzotycznych miejsc.
+const COUNTRY_FETCH_LIST = [
+  // Europa
+  'PL','DE','FR','GB','ES','IT','NL','BE','CH','AT','SE','NO','DK','FI','IS','IE','PT',
+  'CZ','SK','HU','RO','BG','GR','HR','SI','RS','BA','ME','MK','AL','XK',
+  'EE','LV','LT','BY','UA','MD','RU','TR','CY','MT','LU','LI','MC','AD','SM','VA','FO','GI',
+  // Ameryka Pn
+  'US','CA','MX',
+  // Ameryka Łac. + Karaiby
+  'BR','AR','CL','CO','PE','VE','EC','BO','PY','UY','GY','SR','GF',
+  'CU','DO','HT','JM','PR','TT','BS','BB','GT','HN','SV','NI','CR','PA','BZ',
+  // Azja
+  'JP','KR','KP','CN','TW','HK','MO','SG','MY','ID','PH','TH','VN','LA','KH','MM','BN','TL',
+  'IN','PK','BD','LK','NP','BT','MV','AF',
+  'IR','IQ','SA','AE','QA','BH','KW','OM','YE','JO','LB','SY','IL','PS',
+  'KZ','UZ','TM','TJ','KG','MN','GE','AM','AZ',
+  // Afryka
+  'ZA','EG','MA','DZ','TN','LY','SD','SS','ET','KE','UG','TZ','NG','GH','SN','CI','CM','CD','CG',
+  'AO','MZ','ZW','ZM','MW','RW','BI','MG','MU','SC','RE','NA','BW','LS','SZ',
+  'BF','ML','NE','TD','BJ','TG','GN','GW','SL','LR','GM','MR','CV','GQ','GA','ST','DJ','SO','ER','KM',
+  // Oceania
+  'AU','NZ','PG','FJ','SB','VU','NC','PF','WS','TO','KI','TV','NR','PW','MH','FM','GU','MP','AS','CK','NU',
+  // inne
+  'GL','BM','KY','TC','VG','AI','MS','GP','MQ','BL','MF','AW','CW','SX','BQ',
+  'PM','FK','SH','IO','PN','TK','WF','YT','RE','EH'
+];
+
+async function loadStations() {
+  setLoadingStatus('Pobieranie stacji (tryb optymalny)...');
+  try {
+    // Pobieramy tylko dwie główne paczki zamiast setek zapytań per kraj
+    const results = await Promise.allSettled([
+      // Top 4000 stacji z całego świata (z informacją geo)
+      apiFetch('/stations/search', {
+        limit: 4000, 
+        has_geo_info: 'true', 
+        is_https: 'true', 
+        hidebroken: 'true',
+        order: 'votes', 
+        reverse: 'true'
+      }),
+      // Dodatkowo 200 polskich stacji dla pewności pełnego pokrycia u nas
+      apiFetch('/stations/bycountrycodeexact/PL', {
+        limit: 200, 
+        hidebroken: 'true', 
+        order: 'votes', 
+        reverse: 'true'
+      })
+    ]);
+
+    const allRaw = [];
+    results.forEach(r => {
+      if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+        allRaw.push(...r.value);
+      }
+    });
+
+    setLoadingStatus('Deduplikacja danych...');
+    const seen = new Set();
+    const result = [];
+    
+    for (const s of allRaw) {
+      if (seen.has(s.stationuuid)) continue;
+      seen.add(s.stationuuid);
+      if (isStationValid(s)) {
+        result.push(normalizeStation(s));
+      }
+    }
+
+    console.log('[stations] Załadowano optymalną liczbę:', result.length);
+    return result;
+  } catch (e) {
+    setLoadingStatus('Błąd: ' + e.message);
+    return [];
+  }
+}
+
+/* ============================================================
+   MAP
+   ============================================================ */
+let map, cluster, tileLayer;
+
+function createTileLayer() {
+  // Tryb ciemny: Carto Dark Matter | Tryb jasny: Carto Voyager (subtelny, gold-friendly)
+  if (state.theme === 'light') {
+    return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap · © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19
+    });
+  }
+  return L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap · © CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19
+  });
+}
+
+function initMap() {
+  map = L.map('map', {
+    center: [42, 16],
+    zoom: 3,
+    minZoom: 2,
+    maxZoom: 12,
+    worldCopyJump: true,
+    zoomControl: true,
+    attributionControl: true
+  });
+
+  tileLayer = createTileLayer();
+  tileLayer.addTo(map);
+
+  cluster = L.markerClusterGroup({
+    maxClusterRadius: 45,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    chunkedLoading: true
+  });
+  map.addLayer(cluster);
+}
+
+function renderMarkers() {
+  cluster.clearLayers();
+  state.markers.clear();
+
+  // Filtruj po aktualnym gatunku
+  let stations = state.stations;
+  if (state.genre && state.genre !== 'all') {
+    const pattern = GENRE_TAG_PATTERNS[state.genre];
+    if (pattern) stations = stations.filter(s => pattern.test(s.tagsRaw || ''));
+  }
+
+  for (const s of stations) {
+    const icon = L.divIcon({
+      className: '',
+      html: '<div class="station-marker-wrap"><div class="station-marker" data-uuid="' + s.uuid + '"></div></div>',
+      iconSize: [44, 44],
+      iconAnchor: [22, 22]
+    });
+    const m = L.marker([s.lat, s.lng], { icon, station: s });
+    m.on('click', () => playStation(s));
+    cluster.addLayer(m);
+    state.markers.set(s.uuid, m);
+  }
+}
+
+function highlightMarker(uuid) {
+  // remove all active classes
+  document.querySelectorAll('.station-marker.active').forEach(el => el.classList.remove('active'));
+  // add to current
+  if (uuid) {
+    const m = state.markers.get(uuid);
+    if (m && m._icon) {
+      const dot = m._icon.querySelector('.station-marker');
+      if (dot) dot.classList.add('active');
+    } else if (m) {
+      // marker is in a cluster — find cluster's parent visible marker is null
+      // we'll just zoom to it
+      const station = state.byUuid.get(uuid);
+      if (station) map.setView([station.lat, station.lng], Math.max(map.getZoom(), 6));
+    }
+  }
+}
+
+/* ============================================================
+   PLAYER
+   ============================================================ */
+function playStation(station) {
+  if (!station) return;
+  state.current = station;
+  state.isLoading = true;
+
+  // UI update
+  $('playerName').textContent = station.name;
+  $('playerInfo').textContent = [
+    flag(station.countryCode) + ' ' + (station.country || station.countryCode),
+    station.tags
+  ].filter(Boolean).join(' · ').slice(0, 80);
+
+  const fav = $('playerFavicon');
+  fav.innerHTML = '';
+  if (station.favicon) {
+    const img = document.createElement('img');
+    img.src = station.favicon;
+    img.onerror = () => { fav.innerHTML = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 14 0"/><circle cx="12" cy="14" r="2"/><path d="M12 16v6"/></svg>'; };
+    fav.appendChild(img);
+  } else {
+    fav.innerHTML = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 14 0"/><circle cx="12" cy="14" r="2"/><path d="M12 16v6"/></svg>';
+  }
+
+  $('player').classList.add('visible');
+  $('playPauseBtn').classList.add('loading');
+  highlightMarker(station.uuid);
+  highlightGlobeMarker(station.uuid);
+  updateFavToggleBtn();
+  updateFavListUi();
+  updateSearchListUi();
+  pushRecent(station);
+
+  // play audio
+  // Sprawdź czy URL nie jest playlistą / nieobsługiwanym formatem (last-mile guard)
+  if (/\.(m3u8|m3u|pls|asx|ram)(\?|$)/i.test(station.url)) {
+    state.isLoading = false;
+    setPlayingUi(false);
+    $('playPauseBtn').classList.remove('loading');
+    showToast('Format playlisty nieobsługiwany przez przeglądarkę');
+    return;
+  }
+  audio.src = station.url;
+  audio.load();
+  audio.play().then(() => {
+    state.isPlaying = true;
+    state.isLoading = false;
+    setPlayingUi(true);
+    setMediaSession(station);
+  }).catch(err => {
+    state.isPlaying = false;
+    state.isLoading = false;
+    setPlayingUi(false);
+    $('playPauseBtn').classList.remove('loading');
+    // NotAllowedError = autoplay blokowane, NotSupportedError = format/CORS
+    if (err && err.name === 'NotAllowedError') {
+      showToast('Tap ▶ ponownie aby odtworzyć');
+    } else if (err && err.name === 'NotSupportedError') {
+      showToast('Stream nieobsługiwany (' + (station.codec || 'unknown') + ')');
+    } else {
+      showToast('Stream offline lub niedostępny');
+    }
+  });
+}
+
+function setPlayingUi(playing) {
+  state.isPlaying = playing;
+  $('playIcon').style.display = playing ? 'none' : 'block';
+  $('pauseIcon').style.display = playing ? 'block' : 'none';
+  $('playerEq').classList.toggle('playing', playing);
+  $('playPauseBtn').classList.remove('loading');
+}
+
+function togglePlayPause() {
+  if (!state.current) return;
+  if (state.isPlaying) {
+    audio.pause();
+  } else {
+    $('playPauseBtn').classList.add('loading');
+    audio.play().catch(() => {
+      $('playPauseBtn').classList.remove('loading');
+      showToast('Stream nieosiągalny');
+    });
+  }
+}
+
+audio.addEventListener('playing', () => setPlayingUi(true));
+audio.addEventListener('pause', () => setPlayingUi(false));
+audio.addEventListener('ended', () => setPlayingUi(false));
+audio.addEventListener('error', () => {
+  setPlayingUi(false);
+  $('playPauseBtn').classList.remove('loading');
+  if (!state.current) return;
+  // MediaError codes: 1=ABORTED 2=NETWORK 3=DECODE 4=SRC_NOT_SUPPORTED
+  const code = audio.error && audio.error.code;
+  let msg = 'Stream offline';
+  if (code === 4) msg = 'Format strumienia nieobsługiwany';
+  else if (code === 3) msg = 'Błąd dekodowania audio';
+  else if (code === 2) msg = 'Błąd sieci - stream niedostępny';
+  showToast(msg);
+});
+
+function setMediaSession(station) {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: station.name,
+    artist: station.country || station.countryCode || '',
+    album: station.tags || 'Radio',
+    artwork: station.favicon ? [{ src: station.favicon, sizes: '256x256', type: 'image/png' }] : []
+  });
+  navigator.mediaSession.setActionHandler('play', () => audio.play());
+  navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+  navigator.mediaSession.setActionHandler('stop', () => audio.pause());
+}
+
+/* ============================================================
+   FAVORITES
+   ============================================================ */
+function isFav(uuid) {
+  return state.favorites.some(f => f.uuid === uuid);
+}
+
+function toggleFav(station) {
+  const idx = state.favorites.findIndex(f => f.uuid === station.uuid);
+  if (idx >= 0) {
+    state.favorites.splice(idx, 1);
+    showToast('Usunięto z ulubionych');
+  } else {
+    state.favorites.unshift({
+      uuid: station.uuid,
+      name: station.name,
+      url: station.url,
+      country: station.country,
+      countryCode: station.countryCode,
+      tags: station.tags,
+      favicon: station.favicon,
+      bitrate: station.bitrate,
+      codec: station.codec,
+      lat: station.lat, lng: station.lng,
+      votes: station.votes
+    });
+    showToast('Dodano do ulubionych');
+  }
+  saveFavs();
+  updateFavToggleBtn();
+  updateFavBadge();
+  updateFavListUi();
+  updateSearchListUi();
+}
+
+function saveFavs() {
+  localStorage.setItem('rg_favorites', JSON.stringify(state.favorites));
+}
+
+function updateFavToggleBtn() {
+  if (!state.current) return;
+  $('favToggleBtn').classList.toggle('active', isFav(state.current.uuid));
+}
+
+function updateFavBadge() {
+  const b = $('favBadge');
+  if (state.favorites.length > 0) {
+    b.style.display = 'grid';
+    b.textContent = state.favorites.length > 99 ? '99+' : state.favorites.length;
+  } else {
+    b.style.display = 'none';
+  }
+}
+
+/* ============================================================
+   SEARCH & FILTERS
+   ============================================================ */
+// Mapowanie genre chip -> wzorzec tagów Radio-browser (lowercase)
+const GENRE_TAG_PATTERNS = {
+  anime:      /\b(anime|otaku|j-anime)\b/,
+  jpop:       /\b(j-?pop|jpop|japanese pop)\b/,
+  kpop:       /\b(k-?pop|kpop|korean pop)\b/,
+  phonk:      /\bphonk\b/,
+  lofi:       /\b(lo-?fi|lofi|chillhop|chill ?hop)\b/,
+  electronic: /\b(electronic|edm|techno|house|trance|dubstep|drum ?and ?bass|dnb)\b/,
+  rock:       /\b(rock|metal|punk|grunge|alternative)\b/,
+  jazz:       /\b(jazz|swing|bebop|blues)\b/,
+  classical:  /\b(classical|opera|orchestra|symphon|baroque)\b/
+};
+
+function applyFilter(stations, filter, query) {
+  let list = stations;
+  // Genre filter (działa równolegle z country filter)
+  if (state.genre && state.genre !== 'all') {
+    const pattern = GENRE_TAG_PATTERNS[state.genre];
+    if (pattern) list = list.filter(s => pattern.test(s.tagsRaw || ''));
+  }
+  if (filter === 'near' && state.userLatLng) {
+    const [lat, lng] = state.userLatLng;
+    list = list.map(s => ({
+      ...s,
+      _dist: Math.hypot(s.lat - lat, s.lng - lng)
+    })).sort((a, b) => a._dist - b._dist).slice(0, 100);
+  } else if (filter !== 'all' && filter !== 'near') {
+    list = list.filter(s => s.countryCode === filter);
+  }
+  if (query) {
+    const q = query.toLowerCase();
+    list = list.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      (s.country || '').toLowerCase().includes(q) ||
+      (s.tags || '').toLowerCase().includes(q)
+    );
+  }
+  return list.slice(0, 200);
+}
+
+function renderStationList(container, stations, emptyMsg) {
+  if (stations.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="deco">— Cisza —</div>' + emptyMsg + '</div>';
+    return;
+  }
+  container.innerHTML = '';
+  for (const s of stations) {
+    const row = document.createElement('div');
+    row.className = 'station-row' + (state.current && state.current.uuid === s.uuid ? ' active' : '');
+    row.innerHTML = `
+      <div class="station-favicon">
+        ${s.favicon ? `<img src="${s.favicon}" onerror="this.parentElement.innerHTML='<svg fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' viewBox=\\'0 0 24 24\\'><path d=\\'M5 12a7 7 0 1 1 14 0\\'/><circle cx=\\'12\\' cy=\\'14\\' r=\\'2\\'/><path d=\\'M12 16v6\\'/></svg>'">` : `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 14 0"/><circle cx="12" cy="14" r="2"/><path d="M12 16v6"/></svg>`}
+      </div>
+      <div class="station-meta">
+        <div class="station-name">${escapeHtml(s.name)}</div>
+        <div class="station-info">${flag(s.countryCode)} ${escapeHtml(s.country || s.countryCode || '—')}${s.tags ? ' · ' + escapeHtml(s.tags) : ''}${s.bitrate ? ' · ' + s.bitrate + ' kbps' : ''}</div>
+      </div>
+      <button class="station-fav-btn ${isFav(s.uuid) ? 'active' : ''}" data-uuid="${s.uuid}" aria-label="Ulubione">
+        <svg fill="currentColor" viewBox="0 0 24 24" width="18" height="18"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </button>
+    `;
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.station-fav-btn')) return;
+      playStation(s);
+      // pan map to station
+      map.setView([s.lat, s.lng], Math.max(map.getZoom(), 5), { animate: true });
+    });
+    row.querySelector('.station-fav-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFav(s);
+    });
+    container.appendChild(row);
+  }
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function updateSearchListUi() {
+  const q = $('searchInput').value.trim();
+  const list = applyFilter(state.stations, state.filter, q);
+  renderStationList($('searchResults'), list, q ? 'Brak wyników dla "' + escapeHtml(q) + '"' : 'Wpisz nazwę stacji, kraju lub gatunku');
+}
+
+function updateFavListUi() {
+  renderStationList($('favResults'), state.favorites, 'Brak ulubionych. Tapnij ❤ przy stacji aby dodać.');
+}
+
+/* ============================================================
+   GEOLOCATION (optional)
+   ============================================================ */
+function tryGeolocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => { state.userLatLng = [pos.coords.latitude, pos.coords.longitude]; },
+    () => {},
+    { timeout: 4000, maximumAge: 600000 }
+  );
+}
+
+/* ============================================================
+   UI WIRING
+   ============================================================ */
+function closeAllPanels() {
+  $('searchPanel').classList.remove('open');
+  $('favPanel').classList.remove('open');
+  $('recentPanel').classList.remove('open');
+  $('cosmosPanel').classList.remove('open');
+  $('searchBtn').classList.remove('active');
+  $('favBtn').classList.remove('active');
+  $('recentBtn').classList.remove('active');
+  // cosmosBtn zostawiamy z .active jeśli tryb jest włączony - to inny stan
+}
+
+$('searchBtn').addEventListener('click', () => {
+  const open = $('searchPanel').classList.contains('open');
+  closeAllPanels();
+  if (!open) {
+    $('searchPanel').classList.add('open');
+    $('searchBtn').classList.add('active');
+    setTimeout(() => $('searchInput').focus(), 100);
+    updateSearchListUi();
+  }
+});
+$('searchClose').addEventListener('click', closeAllPanels);
+
+$('favBtn').addEventListener('click', () => {
+  const open = $('favPanel').classList.contains('open');
+  closeAllPanels();
+  if (!open) {
+    $('favPanel').classList.add('open');
+    $('favBtn').classList.add('active');
+    updateFavListUi();
+  }
+});
+$('favClose').addEventListener('click', closeAllPanels);
+
+// === COSMOS PANEL ===
+$('cosmosBtn').addEventListener('click', () => {
+  const open = $('cosmosPanel').classList.contains('open');
+  closeAllPanels();
+  if (!open) {
+    $('cosmosPanel').classList.add('open');
+    syncCosmosPanelUI();
+    updateCosmosInfo();
+  }
+});
+$('cosmosClose').addEventListener('click', closeAllPanels);
+
+function syncCosmosPanelUI() {
+  $('optCosmosOn').checked = state.cosmos.on;
+  $('optShowOrbits').checked = state.cosmos.orbits;
+  $('optShowMoonOrbit').checked = state.cosmos.moonOrbit;
+  $('optShowISS').checked = state.cosmos.iss;
+  $('optShowSatellites').checked = state.cosmos.satellites;
+  $('optShowDebris').checked = state.cosmos.debris;
+  $('optShowComets').checked = state.cosmos.comets;
+  $('optShowMeteors').checked = state.cosmos.meteors;
+}
+
+function updateCosmosInfo() {
+  const info = $('cosmosInfo');
+  if (state.cosmos.on) {
+    if (state.view !== 'globe') {
+      info.innerHTML = '⚠ <strong>Tryb kosmiczny działa tylko w widoku globusa.</strong> Przełącz widok przyciskiem 🌍 obok.';
+    } else {
+      const issSrc = cosmos.issState && cosmos.issState.lat !== 0
+        ? `${cosmos.issState.lat.toFixed(1)}°, ${cosmos.issState.lng.toFixed(1)}° · ${cosmos.issState.alt.toFixed(0)} km`
+        : 'pobieranie…';
+      info.innerHTML = `<strong>Aktywny.</strong> Pozycje liczone w czasie rzeczywistym.<br>` +
+                       `🛰 <strong>ISS:</strong> ${issSrc}<br>` +
+                       `📡 Satelitów: ${cosmos.satellites.length}<br>` +
+                       `🥫 Śmieci: ${cosmos.debris.length}<br>` +
+                       `Kliknij obiekt aby zobaczyć szczegóły.`;
+    }
+  } else {
+    info.innerHTML = 'Włącz tryb kosmiczny żeby zobaczyć orbity, ISS, satelity i komety wokół Ziemi.';
+  }
+}
+
+function saveCosmosState() {
+  localStorage.setItem('rg_cosmos', JSON.stringify(state.cosmos));
+}
+
+function applyCosmosToggle() {
+  saveCosmosState();
+  if (state.cosmos.on) {
+    $('cosmosBtn').classList.add('active');
+    if (state.view === 'globe') {
+      cosmos.enable();
+    } else {
+      // Jeśli włączono kosmos w trybie mapy, automatycznie przełącz na globus
+      applyView('globe');
+    }
+  } else {
+    $('cosmosBtn').classList.remove('active');
+    cosmos.disable();
+  }
+  updateCosmosInfo();
+}
+
+$('optCosmosOn').addEventListener('change', e => {
+  state.cosmos.on = e.target.checked;
+  applyCosmosToggle();
+});
+const cosmosOptKeys = [
+  ['optShowOrbits', 'orbits'],
+  ['optShowMoonOrbit', 'moonOrbit'],
+  ['optShowISS', 'iss'],
+  ['optShowSatellites', 'satellites'],
+  ['optShowDebris', 'debris'],
+  ['optShowComets', 'comets'],
+  ['optShowMeteors', 'meteors'],
+];
+for (const [id, key] of cosmosOptKeys) {
+  $(id).addEventListener('change', e => {
+    state.cosmos[key] = e.target.checked;
+    saveCosmosState();
+    if (state.cosmos.on && state.view === 'globe') {
+      cosmos.redraw();
+    }
+  });
+}
+
+$('searchInput').addEventListener('input', updateSearchListUi);
+
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.filter = chip.dataset.filter;
+    updateSearchListUi();
+  });
+});
+
+document.querySelectorAll('.genre-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.genre = chip.dataset.genre;
+    updateSearchListUi();
+    renderMarkers();              // odśwież mapę pod kątem gatunku
+    if (globe.initialized) globe.renderMarkers();
+  });
+});
+
+/* ============================================================
+   THEME (light/dark)
+   ============================================================ */
+function applyTheme(theme) {
+  state.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('rg_theme', theme);
+  $('iconMoon').style.display = theme === 'dark' ? 'block' : 'none';
+  $('iconSun').style.display = theme === 'dark' ? 'none' : 'block';
+  // Switch tile layer for light theme
+  if (map && tileLayer) {
+    map.removeLayer(tileLayer);
+    tileLayer = createTileLayer();
+    tileLayer.addTo(map);
+  }
+}
+$('themeToggleBtn').addEventListener('click', () => {
+  applyTheme(state.theme === 'dark' ? 'light' : 'dark');
+});
+
+/* ============================================================
+   VIEW MODE (map / globe)
+   ============================================================ */
+async function applyView(view) {
+  state.view = view;
+  localStorage.setItem('rg_view', view);
+  $('iconGlobe').style.display = view === 'map' ? 'block' : 'none';
+  $('iconMap').style.display = view === 'map' ? 'none' : 'block';
+  $('map').style.display = view === 'map' ? 'block' : 'none';
+  $('globeContainer').classList.toggle('visible', view === 'globe');
+  if (view === 'globe') {
+    if (!globe.initialized) await globe.init();
+    else {
+      globe.resize(); globe.recalcScale(); globe.draw(); globe.renderMarkers(); globe.drawCelestial();
+      // Upewnij się że pętla rAF działa (mogła zostać zatrzymana przy wyjściu z globusa)
+      globe.startCelestialLoop();
+    }
+    // Tryb kosmiczny
+    if (state.cosmos.on) {
+      cosmos.enable();
+    }
+  } else if (map) {
+    cosmos.stopAnimation();
+    // Zatrzymaj pętlę celestial gdy nie ma globusa (oszczędność CPU)
+    globe.stopCelestialLoop();
+    setTimeout(() => map.invalidateSize(), 50);
+  }
+}
+$('viewToggleBtn').addEventListener('click', () => {
+  applyView(state.view === 'map' ? 'globe' : 'map');
+});
+
+/* ============================================================
+   RECENTLY PLAYED
+   ============================================================ */
+function pushRecent(station) {
+  if (!station) return;
+  const minimal = {
+    uuid: station.uuid,
+    name: station.name,
+    country: station.country,
+    countryCode: station.countryCode,
+    url: station.url,
+    favicon: station.favicon,
+    lat: station.lat,
+    lng: station.lng,
+    tags: station.tags,
+    tagsRaw: station.tagsRaw,
+    bitrate: station.bitrate,
+    codec: station.codec,
+    ts: Date.now()
+  };
+  state.recents = [minimal, ...state.recents.filter(r => r.uuid !== station.uuid)].slice(0, 15);
+  localStorage.setItem('rg_recents', JSON.stringify(state.recents));
+  updateRecentListUi();
+}
+
+function updateRecentListUi() {
+  const container = $('recentResults');
+  container.innerHTML = '';
+  if (!state.recents.length) {
+    container.innerHTML = '<div class="recent-empty">Brak historii. Zacznij słuchać aby zobaczyć tu stacje.</div>';
+    return;
+  }
+  for (const r of state.recents) {
+    const row = document.createElement('div');
+    row.className = 'recent-row';
+    const minutes = Math.round((Date.now() - r.ts) / 60000);
+    let when;
+    if (minutes < 1) when = 'przed chwilą';
+    else if (minutes < 60) when = minutes + ' min temu';
+    else if (minutes < 1440) when = Math.round(minutes / 60) + ' godz. temu';
+    else when = Math.round(minutes / 1440) + ' dni temu';
+    row.innerHTML = `
+      <div class="rr-favicon">
+        ${r.favicon ? `<img src="${escapeHtml(r.favicon)}" onerror="this.style.display='none';this.parentElement.innerHTML='<svg fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' viewBox=\\'0 0 24 24\\'><path d=\\'M5 12a7 7 0 1 1 14 0\\'/><circle cx=\\'12\\' cy=\\'14\\' r=\\'2\\'/><path d=\\'M12 16v6\\'/></svg>'">` : '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 14 0"/><circle cx="12" cy="14" r="2"/><path d="M12 16v6"/></svg>'}
+      </div>
+      <div class="rr-info">
+        <div class="rr-name">${escapeHtml(r.name)}</div>
+        <div class="rr-meta">${flag(r.countryCode)} ${escapeHtml(r.country || r.countryCode || '—')} · ${when}</div>
+      </div>
+    `;
+    row.addEventListener('click', () => {
+      // odtwórz pełną wersję jeśli istnieje w state.byUuid, inaczej ze snapshotu
+      const live = state.byUuid.get(r.uuid) || r;
+      playStation(live);
+    });
+    container.appendChild(row);
+  }
+}
+
+$('recentBtn').addEventListener('click', () => {
+  const open = $('recentPanel').classList.contains('open');
+  closeAllPanels();
+  if (!open) {
+    $('recentPanel').classList.add('open');
+    $('recentBtn').classList.add('active');
+    updateRecentListUi();
+  }
+});
+$('recentClose').addEventListener('click', closeAllPanels);
+$('recentClear').addEventListener('click', () => {
+  state.recents = [];
+  localStorage.setItem('rg_recents', '[]');
+  updateRecentListUi();
+});
+
+/* ============================================================
+   GLOBE (3D orthographic via D3)
+   ============================================================ */
+const globe = {
+  initialized: false,
+  rotation: [20, -25, 0],
+  scale: 0,
+  width: 0,
+  height: 0,
+  projection: null,
+  path: null,
+  svg: null,
+  land: null,
+  graticule: null,
+  markersG: null,
+  worldData: null,
+  nightG: null,
+  sunMoonG: null,
+  celestialUpdateTimer: null,
+  celestialRafId: null,
+  lastCelestialTs: 0,
+
+  async init() {
+    if (typeof d3 === 'undefined' || typeof topojson === 'undefined') {
+      showToast('Globus niedostępny (offline?)');
+      return;
+    }
+    if (this.initialized) return;
+    this.svg = d3.select('#globeSvg');
+    this.resize();
+    this.projection = d3.geoOrthographic().clipAngle(90).rotate(this.rotation);
+    this.recalcScale();
+    this.path = d3.geoPath(this.projection);
+
+    // Sphere outline + graticule + lands + night overlay + markers + sun/moon (kolejność = z-order)
+    this.svg.append('path').attr('class', 'globe-sphere').datum({type: 'Sphere'});
+    this.graticule = this.svg.append('path').attr('class', 'globe-graticule').datum(d3.geoGraticule10());
+    this.land = this.svg.append('path').attr('class', 'globe-land');
+    // Półcień nocny - rysowany NAD lądami ale POD markerami
+    this.nightG = this.svg.append('g').attr('class', 'globe-night-group');
+    this.nightG.append('path').attr('class', 'globe-night');
+    this.nightG.append('path').attr('class', 'globe-night-edge');
+    // Markery - klikalne
+    this.markersG = this.svg.append('g').attr('class', 'globe-markers-group');
+    // Słońce + Księżyc - na samej górze
+    this.sunMoonG = this.svg.append('g').attr('class', 'globe-sunmoon-group');
+
+    // Pobierz uproszczony world-atlas (~80 KB) - lazy z fallbackiem
+    try {
+      const sources = [
+        'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json',
+        'https://unpkg.com/world-atlas@2/countries-110m.json'
+      ];
+      let world = null;
+      for (const src of sources) {
+        try {
+          const r = await fetch(src);
+          if (r.ok) { world = await r.json(); break; }
+        } catch(e){}
+      }
+      if (!world) throw new Error('atlas not loaded');
+      this.worldData = topojson.feature(world, world.objects.countries);
+    } catch (e) {
+      console.warn('Globe: world atlas failed', e);
+      showToast('Globus offline - pokazuję bez konturów lądów');
+    }
+
+    this.draw();
+    this.renderMarkers();
+    this.drawCelestial();
+    this.bindDrag();
+    this.bindZoom();
+    initStarfield();
+    this.initialized = true;
+
+    // Aktualizuj pozycję słońca/księżyca/terminatora na żywo (co 1s via rAF)
+    this.startCelestialLoop();
+
+    window.addEventListener('resize', () => {
+      if (state.view === 'globe') {
+        this.resize();
+        this.recalcScale();
+        this.draw();
+        this.renderMarkers();
+        this.drawCelestial();
+      }
+    });
+  },
+
+  resize() {
+    this.width = window.innerWidth;
+    this.height = window.innerHeight;
+    if (this.svg) this.svg.attr('viewBox', `0 0 ${this.width} ${this.height}`);
+  },
+
+  recalcScale() {
+    this.scale = Math.min(this.width, this.height) * 0.42;
+    this.projection.scale(this.scale).translate([this.width / 2, this.height / 2]);
+  },
+
+  draw() {
+    if (!this.path) return;
+    this.svg.select('.globe-sphere').attr('d', this.path);
+    this.graticule.attr('d', this.path);
+    if (this.worldData) {
+      this.land.datum(this.worldData).attr('d', this.path);
+    }
+  },
+
+  renderMarkers() {
+    if (!this.markersG) return;
+    // filtruj zgodnie z aktualnym genre
+    let stations = state.stations;
+    if (state.genre && state.genre !== 'all') {
+      const pattern = GENRE_TAG_PATTERNS[state.genre];
+      if (pattern) stations = stations.filter(s => pattern.test(s.tagsRaw || ''));
+    }
+    // Każdy marker = grupa: większy transparentny krąg (hit-area 16px) + widoczna kropka 5px
+    const sel = this.markersG.selectAll('g.globe-marker-g').data(stations, d => d.uuid);
+    sel.exit().remove();
+    const enter = sel.enter().append('g')
+      .attr('class', 'globe-marker-g')
+      .style('cursor', 'pointer');
+    // Niewidzialna duża hit-area
+    enter.append('circle')
+      .attr('class', 'globe-marker-hit')
+      .attr('r', 14);
+    // Widoczna kropka
+    enter.append('circle')
+      .attr('class', 'globe-marker')
+      .attr('r', 5);
+    enter.append('title').text(d => d.name + (d.country ? ' · ' + d.country : ''));
+    // Click handler na całej grupie - z stopPropagation żeby nie odpalić drag
+    enter.on('pointerdown', function(event, d) {
+      // Oznacz że pointerdown trafił na marker - drag w bindDrag to zignoruje
+      event.stopPropagation();
+      this.__markerDownAt = [event.clientX, event.clientY];
+    });
+    enter.on('pointerup', function(event, d) {
+      event.stopPropagation();
+      const downAt = this.__markerDownAt;
+      this.__markerDownAt = null;
+      if (!downAt) return;
+      const dx = event.clientX - downAt[0];
+      const dy = event.clientY - downAt[1];
+      // Tylko jeśli pointer się prawie nie poruszył = klik a nie drag
+      if (Math.hypot(dx, dy) < 8) {
+        playStation(d);
+      }
+    });
+    this.updateMarkerPositions();
+  },
+
+  updateMarkerPositions() {
+    if (!this.markersG || !this.projection) return;
+    const rotate = this.projection.rotate();
+    this.markersG.selectAll('g.globe-marker-g').each((d, i, nodes) => {
+      const node = d3.select(nodes[i]);
+      const visible = isVisibleOnGlobe(d.lat, d.lng, rotate);
+      if (!visible) {
+        node.style('display', 'none');
+        return;
+      }
+      const pt = this.projection([d.lng, d.lat]);
+      if (!pt || isNaN(pt[0])) { node.style('display', 'none'); return; }
+      node.style('display', null).attr('transform', `translate(${pt[0]},${pt[1]})`);
+    });
+  },
+
+  /* ============================================================
+     DAY/NIGHT TERMINATOR + SUN + MOON
+     Bazuje na realnym czasie UTC. Pozycje słońca/księżyca obliczane
+     z prostych formuł astronomicznych (dokładność ~0.5°, wystarcza wizualnie).
+     ============================================================ */
+  drawCelestial() {
+    if (!this.nightG || !this.sunMoonG || !this.projection) return;
+
+    const now = new Date();
+    const sun = computeSunPosition(now);   // {lat, lng} subsolar point
+    const moon = computeMoonPosition(now); // {lat, lng} sublunar point + phase
+
+    // === Terminator: półkula nocna jako geoCircle 90° wokół ANTYsolarnego punktu ===
+    const antiSolar = [sun.lng + 180, -sun.lat];
+    const nightCircle = d3.geoCircle().center(antiSolar).radius(90)();
+    this.nightG.select('.globe-night').datum(nightCircle).attr('d', this.path);
+    this.nightG.select('.globe-night-edge').datum(nightCircle).attr('d', this.path);
+
+    // === Słońce ===
+    const rotate = this.projection.rotate();
+    const sunVisible = isVisibleOnGlobe(sun.lat, sun.lng, rotate);
+    const moonVisible = isVisibleOnGlobe(moon.lat, moon.lng, rotate);
+
+    // Czyść poprzednie
+    this.sunMoonG.selectAll('*').remove();
+
+    if (sunVisible) {
+      const sp = this.projection([sun.lng, sun.lat]);
+      if (sp && !isNaN(sp[0])) {
+        const sg = this.sunMoonG.append('g').attr('class', 'globe-sun-group');
+        // Promienie
+        const rays = 12;
+        const r1 = 12, r2 = 18;
+        for (let i = 0; i < rays; i++) {
+          const ang = (i / rays) * Math.PI * 2;
+          sg.append('line')
+            .attr('class', 'globe-sun-rays')
+            .attr('x1', sp[0] + Math.cos(ang) * r1)
+            .attr('y1', sp[1] + Math.sin(ang) * r1)
+            .attr('x2', sp[0] + Math.cos(ang) * r2)
+            .attr('y2', sp[1] + Math.sin(ang) * r2);
+        }
+        sg.append('circle')
+          .attr('class', 'globe-sun')
+          .attr('cx', sp[0]).attr('cy', sp[1]).attr('r', 9);
+        sg.append('title').text(`☀ Słońce · ${sun.lat.toFixed(1)}°, ${sun.lng.toFixed(1)}°`);
+      }
+    }
+
+    if (moonVisible) {
+      const mp = this.projection([moon.lng, moon.lat]);
+      if (mp && !isNaN(mp[0])) {
+        const mg = this.sunMoonG.append('g').attr('class', 'globe-moon-group');
+        const mr = 7;
+        // Pełna tarcza
+        mg.append('circle')
+          .attr('class', 'globe-moon')
+          .attr('cx', mp[0]).attr('cy', mp[1]).attr('r', mr);
+        // Faza księżyca - cień (nakładka)
+        // phase: 0 = nów, 0.25 = pierwsza kwadra, 0.5 = pełnia, 0.75 = ostatnia kwadra
+        const phase = moon.phase;
+        if (phase < 0.5) {
+          // Faza rosnąca - cień po lewej stronie tarczy (z perspektywy obserwatora)
+          // Im bliżej 0 - tym więcej cienia
+          const shadowAmount = 1 - (phase * 2); // 1 → 0
+          if (shadowAmount > 0.05) {
+            const cx2 = mp[0] - mr * shadowAmount;
+            mg.append('ellipse')
+              .attr('class', 'globe-moon-shadow')
+              .attr('cx', cx2).attr('cy', mp[1])
+              .attr('rx', mr * shadowAmount).attr('ry', mr);
+            // dodatkowo zakryj lewą połowę
+            mg.append('path')
+              .attr('class', 'globe-moon-shadow')
+              .attr('d', `M ${mp[0]} ${mp[1]-mr} A ${mr} ${mr} 0 0 0 ${mp[0]} ${mp[1]+mr} Z`);
+          }
+        } else {
+          // Faza malejąca - cień po prawej stronie
+          const shadowAmount = (phase - 0.5) * 2; // 0 → 1
+          if (shadowAmount > 0.05) {
+            const cx2 = mp[0] + mr * shadowAmount;
+            mg.append('ellipse')
+              .attr('class', 'globe-moon-shadow')
+              .attr('cx', cx2).attr('cy', mp[1])
+              .attr('rx', mr * shadowAmount).attr('ry', mr);
+            mg.append('path')
+              .attr('class', 'globe-moon-shadow')
+              .attr('d', `M ${mp[0]} ${mp[1]-mr} A ${mr} ${mr} 0 0 1 ${mp[0]} ${mp[1]+mr} Z`);
+          }
+        }
+        const phaseName = describeMoonPhase(phase);
+        mg.append('title').text(`🌙 Księżyc · ${phaseName} · ${moon.lat.toFixed(1)}°, ${moon.lng.toFixed(1)}°`);
+      }
+    }
+  },
+
+  startCelestialLoop() {
+    if (this.celestialRafId) return; // już działa
+    const loop = (ts) => {
+      if (state.view === 'globe' && ts - this.lastCelestialTs >= 1000) {
+        this.drawCelestial();
+        this.lastCelestialTs = ts;
+      }
+      this.celestialRafId = requestAnimationFrame(loop);
+    };
+    this.celestialRafId = requestAnimationFrame(loop);
+  },
+
+  stopCelestialLoop() {
+    if (this.celestialRafId) {
+      cancelAnimationFrame(this.celestialRafId);
+      this.celestialRafId = null;
+    }
+  },
+
+  bindDrag() {
+    let dragStart = null;
+    let rotStart = null;
+    const sensitivity = 0.4;
+    const node = document.getElementById('globeContainer');
+    const onPointerDown = (e) => {
+      // Jeśli pointerdown trafił w marker (lub jego hit-area lub title) - nie inicjuj drag
+      if (e.target.closest('.globe-marker-g')) return;
+      dragStart = [e.clientX, e.clientY];
+      rotStart = this.projection.rotate();
+      try { node.setPointerCapture(e.pointerId); } catch(_) {}
+    };
+    const onPointerMove = (e) => {
+      if (!dragStart) return;
+      const dx = e.clientX - dragStart[0];
+      const dy = e.clientY - dragStart[1];
+      const newRot = [
+        rotStart[0] + dx * sensitivity,
+        Math.max(-90, Math.min(90, rotStart[1] - dy * sensitivity)),
+        rotStart[2]
+      ];
+      this.projection.rotate(newRot);
+      this.rotation = newRot;
+      this.draw();
+      this.updateMarkerPositions();
+      this.drawCelestial();
+    };
+    const onPointerUp = (e) => {
+      dragStart = null;
+      try { node.releasePointerCapture(e.pointerId); } catch(_){}
+    };
+    node.addEventListener('pointerdown', onPointerDown);
+    node.addEventListener('pointermove', onPointerMove);
+    node.addEventListener('pointerup', onPointerUp);
+    node.addEventListener('pointercancel', onPointerUp);
+  },
+
+  bindZoom() {
+    const node = document.getElementById('globeContainer');
+    // Click na pustą część globusa zamyka panele
+    let downAt = null;
+    node.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.globe-marker-g')) return;
+      downAt = [e.clientX, e.clientY];
+    });
+    node.addEventListener('pointerup', (e) => {
+      if (!downAt) return;
+      const dx = e.clientX - downAt[0], dy = e.clientY - downAt[1];
+      if (Math.hypot(dx, dy) < 5 && !e.target.closest('.globe-marker-g')) {
+        closeAllPanels();
+      }
+      downAt = null;
+    });
+    node.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.15 : 0.85;
+      this.scale = Math.max(150, Math.min(3000, this.scale * factor));
+      this.projection.scale(this.scale);
+      this.draw();
+      this.updateMarkerPositions();
+      this.drawCelestial();
+    }, { passive: false });
+    // pinch zoom (basic)
+    let pinchStart = null;
+    node.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        pinchStart = { d: pinchDist(e.touches), s: this.scale };
+      }
+    }, { passive: true });
+    node.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && pinchStart) {
+        e.preventDefault();
+        const d = pinchDist(e.touches);
+        this.scale = Math.max(150, Math.min(3000, pinchStart.s * (d / pinchStart.d)));
+        this.projection.scale(this.scale);
+        this.draw();
+        this.updateMarkerPositions();
+        this.drawCelestial();
+      }
+    }, { passive: false });
+    node.addEventListener('touchend', () => { pinchStart = null; });
+  }
+};
+
+/* ============================================================
+   COSMOS MODE - orbity, ISS, satelity, śmieci, komety, meteory
+   ============================================================ */
+const cosmos = {
+  initialized: false,
+  rafId: null,
+  lastFrame: 0,
+  // Warstwy SVG (grupy)
+  orbitsG: null,
+  trailsG: null,
+  satellitesG: null,
+  debrisG: null,
+  cometsG: null,
+  // Stan obiektów
+  satellites: [],     // {type, alt, inclination, raan, omega0, period, label}
+  debris: [],         // {emoji, alt, inclination, raan, omega0, period, label, spin}
+  comets: [],         // {start, end, age, lifetime, color}
+  meteors: [],        // (na canvasie globeStars)
+  // ISS - real position via SGP4-light
+  issState: { lat: 0, lng: 0, alt: 408 },
+  issTrail: [],       // [[lat,lng], ...]
+  // Czas startu animacji
+  t0: Date.now(),
+  // Konfiguracja kosmiczna
+  EARTH_MU: 398600.4418, // km^3/s^2
+  EARTH_R: 6371,         // km
+
+  init() {
+    if (this.initialized) return;
+    if (!globe.svg) return;
+    // Warstwy w odpowiedniej kolejności (z-order)
+    // Komety - daleko (pod globusem) i osobno bardzo daleko (nad)
+    // Najlepiej: orbity i satelity NAD globusem, komety przelatujące przed/za
+    this.orbitsG = globe.svg.append('g').attr('class', 'cosmos-orbits-group');
+    this.trailsG = globe.svg.append('g').attr('class', 'cosmos-trails-group');
+    this.satellitesG = globe.svg.append('g').attr('class', 'cosmos-satellites-group');
+    this.debrisG = globe.svg.append('g').attr('class', 'cosmos-debris-group');
+    this.cometsG = globe.svg.append('g').attr('class', 'cosmos-comets-group');
+
+    this.generateSatellites();
+    this.generateDebris();
+    this.fetchISSPosition();
+    // ISS aktualizuje się co 15s (real API)
+    this.issTimer = setInterval(() => this.fetchISSPosition(), 15000);
+    this.initialized = true;
+  },
+
+  destroy() {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = null;
+    if (this.issTimer) clearInterval(this.issTimer);
+    if (this.orbitsG) this.orbitsG.remove();
+    if (this.trailsG) this.trailsG.remove();
+    if (this.satellitesG) this.satellitesG.remove();
+    if (this.debrisG) this.debrisG.remove();
+    if (this.cometsG) this.cometsG.remove();
+    this.orbitsG = this.trailsG = this.satellitesG = this.debrisG = this.cometsG = null;
+    this.satellites = []; this.debris = []; this.comets = [];
+    this.initialized = false;
+  },
+
+  // Generowanie zestawu satelitów - mix Starlinków, GPS, GEO
+  generateSatellites() {
+    const sats = [];
+    // Starlinks - LEO, ~550 km, inclination 53°, dużo
+    for (let i = 0; i < 30; i++) {
+      sats.push({
+        type: 'starlink',
+        alt: 540 + Math.random() * 30,
+        inclination: 53 + (Math.random() - 0.5) * 4,
+        raan: Math.random() * 360,
+        omega0: Math.random() * 360,
+        label: 'STARLINK-' + (1000 + Math.floor(Math.random() * 5000)),
+      });
+    }
+    // GPS - MEO, ~20200 km, inclination 55°
+    for (let i = 0; i < 8; i++) {
+      sats.push({
+        type: 'gps',
+        alt: 20180 + Math.random() * 50,
+        inclination: 55,
+        raan: i * 60,
+        omega0: Math.random() * 360,
+        label: 'GPS-' + (i + 1),
+      });
+    }
+    // GEO - 35786 km, inclination ~0°
+    const geoNames = ['ASTRA-19E', 'HOTBIRD-13B', 'EUTELSAT-7A', 'INTELSAT-901', 'INMARSAT-4F1', 'TURKSAT-4A'];
+    for (let i = 0; i < 6; i++) {
+      sats.push({
+        type: 'geo',
+        alt: 35786,
+        inclination: 0.5 + (Math.random() - 0.5),
+        raan: 0,
+        omega0: i * 60 + Math.random() * 30,
+        label: geoNames[i],
+      });
+    }
+    // Hubble - LEO, 540 km, inclination 28.5°
+    sats.push({
+      type: 'starlink', alt: 540, inclination: 28.5,
+      raan: Math.random() * 360, omega0: Math.random() * 360,
+      label: 'HST (Hubble)',
+    });
+    // Tiangong - LEO, 380 km, inclination 41.5°
+    sats.push({
+      type: 'starlink', alt: 380, inclination: 41.5,
+      raan: Math.random() * 360, omega0: Math.random() * 360,
+      label: 'CSS Tiangong',
+    });
+    // Nadaj okresy obiegu z wzoru Keplera: T = 2π√(a³/μ)
+    for (const s of sats) {
+      const a = this.EARTH_R + s.alt; // semi-major axis (km)
+      s.period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / this.EARTH_MU); // sekundy
+    }
+    this.satellites = sats;
+  },
+
+  // Easter egg: śmieci kosmiczne z osobowością
+  generateDebris() {
+    const items = [
+      { emoji: '🥫', label: 'Puszka po Pepsi (1996)', alt: 410 },
+      { emoji: '👟', label: 'But astronauty Apollo 13', alt: 600 },
+      { emoji: '🔧', label: 'Klucz Sunity Williams (STS-126)', alt: 400 },
+      { emoji: '📷', label: 'Kamera Michaela Collinsa (Gemini 10)', alt: 550 },
+      { emoji: '🧤', label: 'Rękawica Eda White (Gemini 4)', alt: 450 },
+      { emoji: '🛏', label: 'Worek śmieci ISS (2007)', alt: 420 },
+      { emoji: '🔩', label: 'Śrubka Mir', alt: 380 },
+      { emoji: '🪥', label: 'Szczoteczka kosmiczna', alt: 470 },
+      { emoji: '📡', label: 'Antena Cosmos-1408 (debris 2021)', alt: 480 },
+      { emoji: '🛰', label: 'Iridium-33 fragment', alt: 790 },
+      { emoji: '🪨', label: 'Fragment Long March 5B', alt: 320 },
+      { emoji: '🥄', label: 'Łyżka z misji Skylab', alt: 430 },
+      { emoji: '👜', label: 'Torba Heidemarie Stefanyshyn-Piper (STS-126)', alt: 460 },
+      { emoji: '🔋', label: 'Bateria EP-9 z ISS', alt: 410 },
+      { emoji: '🪐', label: 'Roadster Elona Muska (test heliocentryczny)', alt: 999999 },
+    ];
+    const debris = items.map((it, i) => ({
+      ...it,
+      inclination: 20 + Math.random() * 80,
+      raan: Math.random() * 360,
+      omega0: Math.random() * 360,
+      spin: Math.random() * 360,  // kąt obrotu emoji
+      spinSpeed: (Math.random() - 0.5) * 180, // °/s
+    }));
+    for (const d of debris) {
+      const a = this.EARTH_R + d.alt;
+      d.period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / this.EARTH_MU);
+    }
+    this.debris = debris;
+  },
+
+  // Pobiera pozycję ISS z otwartego API (open-notify lub wheretheiss.at)
+  async fetchISSPosition() {
+    try {
+      // wheretheiss.at - prosty, CORS-friendly, bez klucza
+      const r = await fetch('https://api.wheretheiss.at/v1/satellites/25544');
+      if (!r.ok) throw new Error('iss api');
+      const data = await r.json();
+      const lat = parseFloat(data.latitude);
+      const lng = parseFloat(data.longitude);
+      const alt = parseFloat(data.altitude); // km
+      if (isFinite(lat) && isFinite(lng)) {
+        this.issState = { lat, lng, alt: alt || 408 };
+        // dodaj do śladu
+        this.issTrail.push([lat, lng, Date.now()]);
+        // Usuń stare punkty (>30 minut = 1 obieg)
+        const cutoff = Date.now() - 30 * 60 * 1000;
+        this.issTrail = this.issTrail.filter(p => p[2] > cutoff);
+      }
+    } catch (e) {
+      // Fallback - propagujemy lokalnie z ostatniej znanej pozycji
+      // (lub używamy estymowanej średniej dla ISS: ~7.66 km/s, period 92.68 min)
+    }
+  },
+
+  // Główna pętla animacji
+  startAnimation() {
+    if (this.rafId) return;
+    const tick = (timestamp) => {
+      if (state.view !== 'globe' || !state.cosmos.on) {
+        this.rafId = null;
+        return;
+      }
+      const dt = this.lastFrame ? (timestamp - this.lastFrame) / 1000 : 0.016;
+      this.lastFrame = timestamp;
+      this.tick(dt);
+      this.rafId = requestAnimationFrame(tick);
+    };
+    this.rafId = requestAnimationFrame(tick);
+  },
+
+  stopAnimation() {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = null;
+    this.lastFrame = 0;
+  },
+
+  // Każda klatka
+  tick(dt) {
+    if (!globe.projection) return;
+    const tNow = (Date.now() - this.t0) / 1000;
+    const cfg = state.cosmos;
+
+    // Komety - dodawaj nowe co ~15-30 sekund jeśli aktywne
+    if (cfg.comets) {
+      if (this.comets.length < 2 && Math.random() < 0.005) {
+        this.spawnComet();
+      }
+      for (const c of this.comets) c.age += dt;
+      this.comets = this.comets.filter(c => c.age < c.lifetime);
+    } else {
+      this.comets = [];
+    }
+
+    this.draw(tNow);
+  },
+
+  spawnComet() {
+    // Komety lecą z jednej krawędzi do drugiej, lekko przez środek
+    const W = globe.width, H = globe.height;
+    const side = Math.floor(Math.random() * 4);
+    let sx, sy, ex, ey;
+    if (side === 0) { sx = -50; sy = Math.random() * H; }
+    else if (side === 1) { sx = W + 50; sy = Math.random() * H; }
+    else if (side === 2) { sx = Math.random() * W; sy = -50; }
+    else { sx = Math.random() * W; sy = H + 50; }
+    // Cel - po przeciwnej stronie z lekkim odchyleniem
+    ex = W - sx + (Math.random() - 0.5) * 200;
+    ey = H - sy + (Math.random() - 0.5) * 200;
+    this.comets.push({
+      start: [sx, sy], end: [ex, ey],
+      age: 0, lifetime: 4 + Math.random() * 3
+    });
+  },
+
+  // Pozycja satelity w przestrzeni (geocentric ECI -> ECEF -> lat/lng + altitude)
+  satellitePosition(sat, t) {
+    // Anomalia średnia (rad) - kąt na orbicie
+    const meanMotion = (2 * Math.PI) / sat.period; // rad/s
+    // Wzbogacenie omega0 (deg) o ruch w czasie
+    const M = (sat.omega0 * Math.PI / 180 + meanMotion * t);
+    // Dla orbity kołowej anomalia prawdziwa = anomalia średnia
+    const inc = sat.inclination * Math.PI / 180;
+    const raan = sat.raan * Math.PI / 180;
+    const a = this.EARTH_R + sat.alt; // semi-major axis (km)
+    // Pozycja w płaszczyźnie orbity
+    const xOrb = a * Math.cos(M);
+    const yOrb = a * Math.sin(M);
+    // Obrót wg inklinacji i RAAN -> ECI (geocentric inertial)
+    // Najpierw inklinacja (wokół osi x w płaszczyźnie orbity)
+    const xPostInc = xOrb;
+    const yPostInc = yOrb * Math.cos(inc);
+    const zPostInc = yOrb * Math.sin(inc);
+    // Potem RAAN (wokół osi z)
+    const xEci = xPostInc * Math.cos(raan) - yPostInc * Math.sin(raan);
+    const yEci = xPostInc * Math.sin(raan) + yPostInc * Math.cos(raan);
+    const zEci = zPostInc;
+    // ECI -> ECEF: obrót Ziemi (Earth rotation rate ~7.2921e-5 rad/s)
+    const earthRot = 7.2921159e-5 * t;
+    const xEcef = xEci * Math.cos(earthRot) + yEci * Math.sin(earthRot);
+    const yEcef = -xEci * Math.sin(earthRot) + yEci * Math.cos(earthRot);
+    const zEcef = zEci;
+    // ECEF -> lat/lng + altitude (uproszczone - sferyczna Ziemia)
+    const r = Math.sqrt(xEcef * xEcef + yEcef * yEcef + zEcef * zEcef);
+    const lat = Math.asin(zEcef / r) * 180 / Math.PI;
+    const lng = Math.atan2(yEcef, xEcef) * 180 / Math.PI;
+    return { lat, lng, alt: r - this.EARTH_R };
+  },
+
+  // Rzutuje satelitę na ekran z uwzględnieniem wysokości orbity
+  // Globus ma stały scale, satelita jest "wyżej" więc rzucamy go DALEJ od centrum globusa
+  projectSatellite(satPos) {
+    if (!globe.projection) return null;
+    const rotate = globe.projection.rotate();
+    // Najpierw pozycja na powierzchni Ziemi
+    const surfacePt = globe.projection([satPos.lng, satPos.lat]);
+    if (!surfacePt) return null;
+    // Sprawdź widoczność - dla satelity widoczność jest ŁATWIEJSZA niż dla punktu na powierzchni
+    // bo satelita jest wyżej. Rozszerzamy granicę.
+    const visAngle = this.satelliteVisibilityAngle(satPos.alt);
+    const visible = isVisibleOnGlobeWithMargin(satPos.lat, satPos.lng, rotate, visAngle);
+    if (!visible) return null;
+    // Skalujemy odległość od środka globusa
+    const cx = globe.width / 2, cy = globe.height / 2;
+    const earthScreenR = globe.scale; // promień globusa na ekranie
+    // Stosunek (r_orbit / r_earth)
+    const ratio = (this.EARTH_R + satPos.alt) / this.EARTH_R;
+    // Cap - GEO są dramatycznie daleko, ograniczamy do ~3.5x dla wizualizacji
+    // żeby mieściły się w viewporcie (real ratio dla GEO = 6.6, dla LEO = 1.06)
+    const visualRatio = Math.min(ratio, 1 + (ratio - 1) * 0.5);
+    // Wektor od środka do punktu powierzchni
+    const dx = surfacePt[0] - cx;
+    const dy = surfacePt[1] - cy;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) return [surfacePt[0], surfacePt[1]];
+    // Wektor jednostkowy
+    const ux = dx / len;
+    const uy = dy / len;
+    // Pozycja satelity = punkt powierzchni + wektor radialny * wysokość
+    const altScreen = (visualRatio - 1) * earthScreenR;
+    return [surfacePt[0] + ux * altScreen, surfacePt[1] + uy * altScreen];
+  },
+
+  // Promień horyzontu satelity (deg) - im wyższy, tym więcej widzi
+  satelliteVisibilityAngle(alt) {
+    const a = this.EARTH_R + alt;
+    return Math.acos(this.EARTH_R / a) * 180 / Math.PI;
+  },
+
+  // Główne rysowanie wszystkich obiektów kosmicznych
+  draw(tNow) {
+    if (!globe.svg || !globe.projection) return;
+    const cfg = state.cosmos;
+    const cx = globe.width / 2, cy = globe.height / 2;
+    const earthR = globe.scale;
+
+    // === ORBITY (eliptyczne ścieżki) ===
+    if (cfg.orbits) {
+      // Pokazujemy 3 reprezentatywne orbity: LEO, MEO, GEO
+      const orbits = [
+        { alt: 540, inc: 53, name: 'LEO' },     // Starlink
+        { alt: 20180, inc: 55, name: 'MEO' },   // GPS - pokazane skompresowane
+      ];
+      const sel = this.orbitsG.selectAll('ellipse.cosmos-orbit').data(orbits);
+      sel.exit().remove();
+      const enter = sel.enter().append('ellipse').attr('class', 'cosmos-orbit');
+      sel.merge(enter)
+        .attr('cx', cx).attr('cy', cy)
+        .attr('rx', d => earthR * Math.min(1 + d.alt / this.EARTH_R, 1 + (d.alt / this.EARTH_R) * 0.5))
+        .attr('ry', d => earthR * Math.min(1 + d.alt / this.EARTH_R, 1 + (d.alt / this.EARTH_R) * 0.5) * 0.35)
+        .attr('transform', d => `rotate(${-15 + d.inc * 0.3} ${cx} ${cy})`);
+    } else {
+      this.orbitsG.selectAll('ellipse').remove();
+    }
+
+    // === ORBITA KSIĘŻYCA ===
+    if (cfg.moonOrbit) {
+      // Moon avg distance ~384400 km - daleko, więc kompresujemy
+      const moonRatio = 1 + (384400 / this.EARTH_R - 1) * 0.025;
+      const moonRx = earthR * moonRatio;
+      const moonRy = moonRx * 0.4;
+      let moonOrb = this.orbitsG.select('ellipse.moon-orbit');
+      if (moonOrb.empty()) {
+        moonOrb = this.orbitsG.append('ellipse').attr('class', 'cosmos-orbit moon-orbit');
+      }
+      moonOrb.attr('cx', cx).attr('cy', cy)
+        .attr('rx', moonRx).attr('ry', moonRy)
+        .attr('transform', `rotate(-8 ${cx} ${cy})`);
+    } else {
+      this.orbitsG.select('ellipse.moon-orbit').remove();
+    }
+
+    // === ISS ===
+    // ISS rysuję jako satelitę zaczepionego na pozycji rzeczywistej
+    if (cfg.iss) {
+      // ISS trail - mapuj punkty śladu na ekran (pomijaj te niewidoczne)
+      const trailPts = [];
+      const rotate = globe.projection.rotate();
+      for (const [lat, lng, ts] of this.issTrail) {
+        if (!isVisibleOnGlobe(lat, lng, rotate)) { trailPts.push(null); continue; }
+        const surfacePt = globe.projection([lng, lat]);
+        if (!surfacePt) { trailPts.push(null); continue; }
+        // ISS na 408 km - bardzo blisko powierzchni, marker tuż nad
+        const ratio = 1 + 408 / this.EARTH_R;
+        const dx = surfacePt[0] - cx, dy = surfacePt[1] - cy;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) { trailPts.push([surfacePt[0], surfacePt[1]]); continue; }
+        const altScreen = (ratio - 1) * earthR * 0.5;
+        trailPts.push([surfacePt[0] + dx/len * altScreen, surfacePt[1] + dy/len * altScreen]);
+      }
+      // Rysuj trail jako poliline (z przerwami przy nullach)
+      let trailG = this.trailsG.select('g.iss-trail-g');
+      if (trailG.empty()) trailG = this.trailsG.append('g').attr('class', 'iss-trail-g');
+      const segments = [];
+      let cur = [];
+      for (const p of trailPts) {
+        if (p) cur.push(p);
+        else if (cur.length > 1) { segments.push(cur); cur = []; }
+        else cur = [];
+      }
+      if (cur.length > 1) segments.push(cur);
+      const segSel = trailG.selectAll('path.cosmos-iss-trail').data(segments);
+      segSel.exit().remove();
+      const segEnter = segSel.enter().append('path').attr('class', 'cosmos-iss-trail');
+      segSel.merge(segEnter).attr('d', s => 'M ' + s.map(p => p.join(',')).join(' L '));
+
+      // ISS marker
+      const issPos = this.issState;
+      const issScreen = this.projectSatellite({ lat: issPos.lat, lng: issPos.lng, alt: issPos.alt });
+      let issG = this.satellitesG.select('g.iss-marker-g');
+      if (issG.empty()) {
+        issG = this.satellitesG.append('g').attr('class', 'iss-marker-g').style('cursor', 'pointer');
+        issG.append('rect').attr('class', 'cosmos-iss')
+          .attr('x', -7).attr('y', -3)
+          .attr('width', 14).attr('height', 6)
+          .attr('rx', 1);
+        issG.append('line').attr('x1', -10).attr('y1', 0).attr('x2', -7).attr('y2', 0)
+          .attr('stroke', '#4ade80').attr('stroke-width', 1.5);
+        issG.append('line').attr('x1', 7).attr('y1', 0).attr('x2', 10).attr('y2', 0)
+          .attr('stroke', '#4ade80').attr('stroke-width', 1.5);
+        issG.append('text').attr('class', 'cosmos-label')
+          .attr('y', -10).attr('x', 0).attr('text-anchor', 'middle')
+          .text('ISS');
+        issG.append('title').text(`ISS · International Space Station\n${issPos.lat.toFixed(2)}°, ${issPos.lng.toFixed(2)}° · ${issPos.alt.toFixed(0)} km`);
+        issG.on('click', () => {
+          showToast(`🛰 ISS · ${issPos.lat.toFixed(2)}°, ${issPos.lng.toFixed(2)}° · ${issPos.alt.toFixed(0)} km nad Ziemią`, 4000);
+        });
+      }
+      if (issScreen) {
+        issG.style('display', null).attr('transform', `translate(${issScreen[0]},${issScreen[1]})`);
+        issG.select('title').text(`ISS · International Space Station\n${issPos.lat.toFixed(2)}°, ${issPos.lng.toFixed(2)}° · ${issPos.alt.toFixed(0)} km`);
+      } else {
+        issG.style('display', 'none');
+      }
+    } else {
+      this.trailsG.select('g.iss-trail-g').remove();
+      this.satellitesG.select('g.iss-marker-g').remove();
+    }
+
+    // === SATELITY ===
+    if (cfg.satellites) {
+      const sats = this.satellites;
+      const sel = this.satellitesG.selectAll('g.cosmos-sat-g').data(sats, d => d.label);
+      sel.exit().remove();
+      const enter = sel.enter().append('g').attr('class', 'cosmos-sat-g').style('cursor', 'pointer');
+      enter.append('circle').attr('class', d => 'cosmos-sat cosmos-sat-' + d.type).attr('r', 2.5);
+      enter.append('title');
+      enter.on('click', function(event, d) {
+        event.stopPropagation();
+        const altKm = d.alt < 10000 ? d.alt.toFixed(0) + ' km (LEO)' :
+                       d.alt < 30000 ? d.alt.toFixed(0) + ' km (MEO)' :
+                       d.alt.toFixed(0) + ' km (GEO)';
+        showToast(`📡 ${d.label} · ${altKm}`, 3500);
+      });
+      // Aktualizuj pozycje
+      const merged = sel.merge(enter);
+      merged.each((d, i, nodes) => {
+        const node = d3.select(nodes[i]);
+        const pos = this.satellitePosition(d, tNow);
+        const screen = this.projectSatellite(pos);
+        if (screen) {
+          node.style('display', null).attr('transform', `translate(${screen[0]},${screen[1]})`);
+          node.select('title').text(`${d.label}\n${pos.lat.toFixed(1)}°, ${pos.lng.toFixed(1)}° · ${pos.alt.toFixed(0)} km`);
+        } else {
+          node.style('display', 'none');
+        }
+      });
+    } else {
+      this.satellitesG.selectAll('g.cosmos-sat-g').remove();
+    }
+
+    // === ŚMIECI ===
+    if (cfg.debris) {
+      const items = this.debris;
+      const sel = this.debrisG.selectAll('g.cosmos-debris-g').data(items, d => d.label);
+      sel.exit().remove();
+      const enter = sel.enter().append('g').attr('class', 'cosmos-debris-g').style('cursor', 'pointer');
+      enter.append('text').attr('class', 'cosmos-debris').text(d => d.emoji);
+      enter.append('title');
+      enter.on('click', function(event, d) {
+        event.stopPropagation();
+        showToast(`${d.emoji} ${d.label}`, 4000);
+      });
+      const merged = sel.merge(enter);
+      merged.each((d, i, nodes) => {
+        const node = d3.select(nodes[i]);
+        // Roadster Elona - bardzo daleko, pomijamy w widoku Ziemi
+        if (d.alt > 100000) { node.style('display', 'none'); return; }
+        const pos = this.satellitePosition(d, tNow);
+        const screen = this.projectSatellite(pos);
+        if (screen) {
+          d.spin += d.spinSpeed * 0.016;
+          node.style('display', null).attr('transform', `translate(${screen[0]},${screen[1]}) rotate(${d.spin})`);
+          node.select('title').text(`${d.label}\n${pos.lat.toFixed(1)}°, ${pos.lng.toFixed(1)}° · ${pos.alt.toFixed(0)} km`);
+        } else {
+          node.style('display', 'none');
+        }
+      });
+    } else {
+      this.debrisG.selectAll('g.cosmos-debris-g').remove();
+    }
+
+    // === KOMETY ===
+    if (cfg.comets) {
+      const comets = this.comets;
+      const sel = this.cometsG.selectAll('g.cosmos-comet-g').data(comets, (d, i) => i);
+      sel.exit().remove();
+      const enter = sel.enter().append('g').attr('class', 'cosmos-comet-g');
+      enter.append('path').attr('class', 'cosmos-comet-tail');
+      enter.append('circle').attr('class', 'cosmos-comet-head').attr('r', 3);
+      const merged = sel.merge(enter);
+      merged.each((d, i, nodes) => {
+        const node = d3.select(nodes[i]);
+        const t = d.age / d.lifetime; // 0..1
+        const x = d.start[0] + (d.end[0] - d.start[0]) * t;
+        const y = d.start[1] + (d.end[1] - d.start[1]) * t;
+        // Warkocz: za kometą, w stronę od której przyleciała (przeciwna do ruchu)
+        const dx = d.end[0] - d.start[0];
+        const dy = d.end[1] - d.start[1];
+        const len = Math.hypot(dx, dy);
+        const ux = -dx / len, uy = -dy / len;
+        const tailLen = 80 + 40 * Math.sin(t * Math.PI);
+        const tx = x + ux * tailLen;
+        const ty = y + uy * tailLen;
+        const fadeAlpha = Math.sin(t * Math.PI); // wzrasta i opada
+        node.attr('opacity', fadeAlpha);
+        node.select('path').attr('d', `M ${x} ${y} L ${tx} ${ty}`);
+        node.select('circle').attr('cx', x).attr('cy', y);
+      });
+    } else {
+      this.cometsG.selectAll('g.cosmos-comet-g').remove();
+    }
+  },
+
+  // Włącz tryb kosmosu - wstawia do globusa, startuje animację
+  enable() {
+    if (state.view !== 'globe') return;
+    if (!this.initialized) this.init();
+    // Pokaz informację
+    this.startAnimation();
+  },
+
+  disable() {
+    this.stopAnimation();
+    if (this.orbitsG) this.orbitsG.selectAll('*').remove();
+    if (this.trailsG) this.trailsG.selectAll('*').remove();
+    if (this.satellitesG) this.satellitesG.selectAll('*').remove();
+    if (this.debrisG) this.debrisG.selectAll('*').remove();
+    if (this.cometsG) this.cometsG.selectAll('*').remove();
+  },
+
+  // Re-render bez animacji (np. po obrocie globusa)
+  redraw() {
+    if (!state.cosmos.on) return;
+    const tNow = (Date.now() - this.t0) / 1000;
+    this.draw(tNow);
+  }
+};
+
+// Wariant isVisibleOnGlobe z marginesem (dla satelitów które są wyżej)
+function isVisibleOnGlobeWithMargin(lat, lng, rotate, marginDeg) {
+  const lambda = -rotate[0] * Math.PI / 180;
+  const phi = -rotate[1] * Math.PI / 180;
+  const lat2 = lat * Math.PI / 180;
+  const lng2 = lng * Math.PI / 180;
+  const cosc = Math.sin(phi) * Math.sin(lat2) + Math.cos(phi) * Math.cos(lat2) * Math.cos(lng2 - lambda);
+  // marginDeg pozwala satelicie być widzianym nawet jeśli jest "za" horyzontem,
+  // ale wystaje wystarczająco wysoko nad nim
+  const threshold = -Math.sin(marginDeg * Math.PI / 180);
+  return cosc > threshold;
+}
+
+function pinchDist(touches) {
+  return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+}
+
+/* ============================================================
+   ASTRONOMIA - pozycje słońca i księżyca (subsolar / sublunar point)
+   Bazuje na uproszczonych formułach (Astronomical Algorithms - Meeus, low-precision)
+   Dokładność ~0.5-1° wystarczająca do wizualizacji.
+   ============================================================ */
+
+// Day of year (1-366)
+function dayOfYear(d) {
+  const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 0));
+  const diff = d - start;
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+// Pozycja Słońca: subsolar point (lat = deklinacja, lng = -GHA)
+function computeSunPosition(date) {
+  const d = date || new Date();
+  // Julian Day
+  const jd = d.getTime() / 86400000 + 2440587.5;
+  const n = jd - 2451545.0; // dni od J2000.0
+
+  // Mean longitude of Sun (degrees)
+  let L = (280.460 + 0.9856474 * n) % 360;
+  if (L < 0) L += 360;
+  // Mean anomaly
+  let g = ((357.528 + 0.9856003 * n) % 360) * Math.PI / 180;
+  // Ecliptic longitude
+  const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * Math.PI / 180;
+  // Obliquity of ecliptic
+  const eps = (23.439 - 0.0000004 * n) * Math.PI / 180;
+  // Declination
+  const dec = Math.asin(Math.sin(eps) * Math.sin(lambda)) * 180 / Math.PI;
+  // Right ascension
+  let ra = Math.atan2(Math.cos(eps) * Math.sin(lambda), Math.cos(lambda)) * 180 / Math.PI;
+  if (ra < 0) ra += 360;
+
+  // Greenwich Mean Sidereal Time (degrees)
+  const T = n / 36525;
+  let gmst = (280.46061837 + 360.98564736629 * n + 0.000387933 * T * T) % 360;
+  if (gmst < 0) gmst += 360;
+
+  // Subsolar longitude = ra - gmst (mod 360, then to -180..180)
+  let lng = ra - gmst;
+  while (lng > 180) lng -= 360;
+  while (lng < -180) lng += 360;
+
+  return { lat: dec, lng: lng };
+}
+
+// Pozycja Księżyca: sublunar point + faza
+function computeMoonPosition(date) {
+  const d = date || new Date();
+  const jd = d.getTime() / 86400000 + 2440587.5;
+  const n = jd - 2451545.0;
+  const T = n / 36525;
+
+  // Uproszczone (low-precision) elementy orbity Księżyca - Meeus chapter 47
+  const D2R = Math.PI / 180;
+  // Średnia długość Księżyca
+  let L = (218.316 + 13.176396 * n) % 360;
+  // Średnia anomalia Księżyca
+  let M = (134.963 + 13.064993 * n) % 360;
+  // Argument szerokości
+  let F = (93.272 + 13.229350 * n) % 360;
+  // Średnia anomalia Słońca (do fazy)
+  let Ms = (357.528 + 0.9856003 * n) % 360;
+
+  L *= D2R; M *= D2R; F *= D2R; Ms *= D2R;
+
+  // Długość ekliptyczna Księżyca
+  const lambda = (L * 180/Math.PI + 6.289 * Math.sin(M)) * D2R;
+  // Szerokość ekliptyczna
+  const beta = (5.128 * Math.sin(F)) * D2R;
+  // Obliquity
+  const eps = (23.439 - 0.0000004 * n) * D2R;
+
+  // Konwersja ekliptyka -> ekwator
+  const sinDec = Math.sin(beta) * Math.cos(eps) + Math.cos(beta) * Math.sin(eps) * Math.sin(lambda);
+  const dec = Math.asin(sinDec) * 180/Math.PI;
+  const ra = Math.atan2(
+    Math.sin(lambda) * Math.cos(eps) - Math.tan(beta) * Math.sin(eps),
+    Math.cos(lambda)
+  ) * 180/Math.PI;
+  const raNorm = (ra + 360) % 360;
+
+  // GMST
+  let gmst = (280.46061837 + 360.98564736629 * n + 0.000387933 * T * T) % 360;
+  if (gmst < 0) gmst += 360;
+
+  let lng = raNorm - gmst;
+  while (lng > 180) lng -= 360;
+  while (lng < -180) lng += 360;
+
+  // Faza księżyca: kąt elongacji od Słońca
+  // synodic age - przybliżenie: phase 0..1 gdzie 0=nów, 0.5=pełnia
+  // Użyj uproszczonej formuły bazowanej na Julian day od ostatniego znanego nowiu
+  // Nowy Księżyc 2000-01-06 18:14 UTC, JD = 2451550.1
+  const knownNewMoon = 2451550.1;
+  const synodic = 29.530588853;
+  let phase = ((jd - knownNewMoon) / synodic) % 1;
+  if (phase < 0) phase += 1;
+
+  return { lat: dec, lng: lng, phase: phase };
+}
+
+function describeMoonPhase(p) {
+  if (p < 0.03 || p > 0.97) return 'Nów';
+  if (p < 0.22) return 'Sierp przybywający';
+  if (p < 0.28) return 'Pierwsza kwadra';
+  if (p < 0.47) return 'Garbaty przybywający';
+  if (p < 0.53) return 'Pełnia';
+  if (p < 0.72) return 'Garbaty ubywający';
+  if (p < 0.78) return 'Ostatnia kwadra';
+  return 'Sierp ubywający';
+}
+
+// Czy punkt (lat,lng) jest widoczny na orthographic projection przy danej rotacji
+function isVisibleOnGlobe(lat, lng, rotate) {
+  const lambda = -rotate[0] * Math.PI / 180;
+  const phi = -rotate[1] * Math.PI / 180;
+  const lat2 = lat * Math.PI / 180;
+  const lng2 = lng * Math.PI / 180;
+  const cosc = Math.sin(phi) * Math.sin(lat2) + Math.cos(phi) * Math.cos(lat2) * Math.cos(lng2 - lambda);
+  return cosc > 0;
+}
+
+function highlightGlobeMarker(uuid) {
+  if (!globe.initialized) return;
+  globe.markersG.selectAll('g.globe-marker-g').each(function(d) {
+    d3.select(this).select('circle.globe-marker').classed('active', d && d.uuid === uuid);
+  });
+}
+
+/* ============================================================
+   STARFIELD (canvas tło dla globusa - tylko dark mode)
+   ============================================================ */
+let starfieldInited = false;
+function initStarfield() {
+  if (starfieldInited) return;
+  starfieldInited = true;
+  const canvas = $('globeStars');
+  const ctx = canvas.getContext('2d');
+  const stars = [];
+  const meteors = []; // {x, y, vx, vy, length, life, maxLife}
+  function setSize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    stars.length = 0;
+    const n = Math.round((canvas.width * canvas.height) / 7000);
+    for (let i = 0; i < n; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 1.2 + 0.2,
+        a: Math.random() * 0.8 + 0.2,
+        twinkle: Math.random() * Math.PI * 2
+      });
+    }
+  }
+  function spawnMeteor() {
+    // Meteor leci pod kątem ~30° z prawego górnego rogu w dół-lewo (tradycyjnie)
+    const startX = Math.random() * canvas.width * 0.7 + canvas.width * 0.3;
+    const startY = -20;
+    const speed = 6 + Math.random() * 6;
+    const angle = (Math.PI * 0.6) + (Math.random() - 0.5) * 0.6; // ~108° ± 17°
+    meteors.push({
+      x: startX, y: startY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      length: 80 + Math.random() * 80,
+      life: 0,
+      maxLife: 60 + Math.random() * 30,
+      brightness: 0.7 + Math.random() * 0.3
+    });
+  }
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const t = Date.now() / 1000;
+    // gwiazdy
+    for (const s of stars) {
+      const alpha = s.a * (0.6 + 0.4 * Math.sin(t + s.twinkle));
+      ctx.fillStyle = `rgba(255, 240, 200, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // meteory - tylko gdy włączone i jesteśmy w trybie globusa
+    if (state.cosmos && state.cosmos.on && state.cosmos.meteors && state.view === 'globe') {
+      // nowe co 1-3 sekundy średnio
+      if (Math.random() < 0.012) spawnMeteor();
+      for (let i = meteors.length - 1; i >= 0; i--) {
+        const m = meteors[i];
+        m.x += m.vx;
+        m.y += m.vy;
+        m.life++;
+        const fadeIn = Math.min(1, m.life / 8);
+        const fadeOut = Math.max(0, 1 - (m.life - m.maxLife + 15) / 15);
+        const alpha = m.brightness * fadeIn * fadeOut;
+        // smuga - gradient od jasnego do przezroczystego
+        const tailX = m.x - m.vx * (m.length / Math.hypot(m.vx, m.vy));
+        const tailY = m.y - m.vy * (m.length / Math.hypot(m.vx, m.vy));
+        const grad = ctx.createLinearGradient(m.x, m.y, tailX, tailY);
+        grad.addColorStop(0, `rgba(255, 255, 240, ${alpha})`);
+        grad.addColorStop(0.4, `rgba(180, 220, 255, ${alpha * 0.5})`);
+        grad.addColorStop(1, 'rgba(180, 220, 255, 0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(m.x, m.y);
+        ctx.lineTo(tailX, tailY);
+        ctx.stroke();
+        // główka
+        ctx.fillStyle = `rgba(255, 255, 240, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        if (m.life > m.maxLife || m.x < -50 || m.x > canvas.width + 50 || m.y > canvas.height + 50) {
+          meteors.splice(i, 1);
+        }
+      }
+    } else {
+      meteors.length = 0;
+    }
+    requestAnimationFrame(draw);
+  }
+  setSize();
+  window.addEventListener('resize', setSize);
+  draw();
+}
+
+$('playPauseBtn').addEventListener('click', togglePlayPause);
+$('favToggleBtn').addEventListener('click', () => {
+  if (state.current) toggleFav(state.current);
+});
+
+// Tap on player name/info to expand on map
+$('playerName').addEventListener('click', () => {
+  if (state.current) {
+    closeAllPanels();
+    map.setView([state.current.lat, state.current.lng], Math.max(map.getZoom(), 6), { animate: true });
+  }
+});
+
+// Close panels when clicking on map
+map => map; // placeholder for ordering — actual wiring below in init
+
+/* ============================================================
+   INIT
+   ============================================================ */
+async function main() {
+  // Zastosuj zapisane preferencje PRZED initMap (theme wpływa na tile layer)
+  applyTheme(state.theme);
+
+  initMap();
+  map.on('click', closeAllPanels);
+
+  tryGeolocation();
+  setLoadingStatus('Łączenie z radio-browser.info…');
+
+  const stations = await loadStations();
+  state.stations = stations;
+  state.byUuid = new Map(stations.map(s => [s.uuid, s]));
+  $('stationCount').textContent = stations.length.toString();
+
+  setLoadingStatus('Renderowanie mapy…');
+  renderMarkers();
+  updateFavBadge();
+
+  // Zastosuj zapisany widok (mapa/globus) PO załadowaniu stacji
+  applyView(state.view);
+
+  // Stan trybu kosmicznego z localStorage
+  if (state.cosmos.on) {
+    $('cosmosBtn').classList.add('active');
+    // applyView już mogło wywołać cosmos.enable() jeśli view === 'globe'
+  }
+
+  // małe opóźnienie aby splash wyglądał płynnie
+  setTimeout(hideLoading, 400);
+
+  if (stations.length === 0) {
+    showToast('Brak połączenia. Sprawdź internet.');
+  }
+}
+
+// Service Worker for offline shell (optional, comments only — file:// won't register SW)
+// W trybie HTTPS / GitHub Pages możemy zarejestrować SW, ale single-file PWA i tak działa.
+
+(window.__leafletReady || Promise.resolve())
+  .then(() => main())
+  .catch(err => {
+    console.error(err);
+    setLoadingStatus('Błąd ładowania mapy: ' + (err && err.message ? err.message : 'sprawdź połączenie'));
+  });
+</script>
+</body>
+</html>
