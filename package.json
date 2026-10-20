@@ -1,0 +1,10 @@
+{
+  "name": "radiomj",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static radio map app inspired by Radio Garden",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}
